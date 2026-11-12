@@ -1,8 +1,10 @@
-"""Client HTTP asynchrone pour l'API REST de Valetudo (/api/v2).
+"""Asynchronous HTTP client for the Valetudo REST API (/api/v2).
 
-Toutes les requêtes passent par QgsNetworkAccessManager : elles ne bloquent
-pas l'interface et respectent les réglages proxy de QGIS. Les résultats sont
-diffusés par des signaux Qt.
+All requests go through QgsNetworkAccessManager: they never block the UI and
+they honour the QGIS proxy settings. Results are broadcast with Qt signals.
+
+This module contains no user-facing text: commandDone emits a command key
+(see COMMAND_KEYS) that the UI layer turns into a translated label.
 """
 
 import json
@@ -12,6 +14,8 @@ from qgis.PyQt.QtNetwork import QNetworkRequest, QNetworkReply
 from qgis.core import QgsApplication, QgsNetworkAccessManager, QgsPointXY
 
 from .coords import q2v
+
+COMMAND_KEYS = ("start", "pause", "stop", "home", "segments", "zone", "goto")
 
 
 class ValetudoClient(QObject):
@@ -25,21 +29,21 @@ class ValetudoClient(QObject):
     def __init__(self, base_url, authcfg="", parent=None):
         super().__init__(parent)
         self.base = base_url.rstrip("/") + "/api/v2"
-        self.authcfg = authcfg  # identifiant du gestionnaire d'authentification QGIS
+        self.authcfg = authcfg  # QGIS authentication manager config id
         self.nam = QgsNetworkAccessManager.instance()
-        self._replies = set()   # garde les réponses en vie jusqu'à leur fin
+        self._replies = set()   # keeps replies alive until they finish
         self._map_pending = False
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.fetch_map)
 
-    # -- plomberie ----------------------------------------------------------
+    # -- plumbing -----------------------------------------------------------
 
     def _request(self, path):
         req = QNetworkRequest(QUrl(self.base + path))
         req.setHeader(QNetworkRequest.KnownHeaders.ContentTypeHeader, "application/json")
         if self.authcfg:
             res = QgsApplication.authManager().updateNetworkRequest(req, self.authcfg)
-            if isinstance(res, tuple):  # selon la version de PyQGIS
+            if isinstance(res, tuple):  # depends on the PyQGIS version
                 req = res[1]
         return req
 
@@ -57,7 +61,8 @@ class ValetudoClient(QObject):
             self._replies.discard(reply)
             try:
                 if reply.error() != QNetworkReply.NetworkError.NoError:
-                    self.error.emit(f"{reply.url().toString()} : {reply.errorString()}")
+                    # errorString() is already localised by Qt
+                    self.error.emit(f"{reply.url().toString()}: {reply.errorString()}")
                     return
                 raw = bytes(reply.readAll())
                 data = json.loads(raw) if raw.strip() else None
@@ -72,7 +77,7 @@ class ValetudoClient(QObject):
 
         reply.finished.connect(finished)
 
-    # -- lecture ------------------------------------------------------------
+    # -- reading ------------------------------------------------------------
 
     def fetch_robot_info(self):
         self._get("/robot", self.robotInfoReceived.emit)
@@ -84,7 +89,7 @@ class ValetudoClient(QObject):
         self._get("/robot/state/attributes", self.attributesReceived.emit)
 
     def fetch_map(self):
-        if self._map_pending:  # évite d'empiler les requêtes si le robot est lent
+        if self._map_pending:  # do not pile up requests if the robot is slow
             return
         self._map_pending = True
         self._get("/robot/state/map", self.mapReceived.emit,
@@ -100,14 +105,14 @@ class ValetudoClient(QObject):
     def is_polling(self):
         return self._timer.isActive()
 
-    # -- commandes ----------------------------------------------------------
+    # -- commands -----------------------------------------------------------
 
-    def _command(self, capability, payload, label):
+    def _command(self, capability, payload, key):
         self._put(f"/robot/capabilities/{capability}", payload,
-                  lambda _data: self.commandDone.emit(label))
+                  lambda _data: self.commandDone.emit(key))
 
     def basic_control(self, action):
-        """action : 'start', 'stop', 'pause' ou 'home'."""
+        """action: 'start', 'stop', 'pause' or 'home'."""
         self._command("BasicControlCapability", {"action": action}, action)
 
     def clean_segments(self, segment_ids, iterations=1):
@@ -116,21 +121,21 @@ class ValetudoClient(QObject):
             "segment_ids": [str(s) for s in segment_ids],
             "iterations": iterations,
             "customOrder": False,
-        }, "nettoyage des pièces")
+        }, "segments")
 
     def clean_zone_qgis(self, rect, iterations=1):
-        """Nettoie un QgsRectangle exprimé dans le repère QGIS."""
-        x1, y1 = q2v(QgsPointXY(rect.xMinimum(), rect.yMaximum()))  # haut-gauche
-        x2, y2 = q2v(QgsPointXY(rect.xMaximum(), rect.yMinimum()))  # bas-droite
+        """Clean a QgsRectangle expressed in the QGIS frame."""
+        x1, y1 = q2v(QgsPointXY(rect.xMinimum(), rect.yMaximum()))  # top-left
+        x2, y2 = q2v(QgsPointXY(rect.xMaximum(), rect.yMinimum()))  # bottom-right
         zone = {"points": {
             "pA": {"x": x1, "y": y1}, "pB": {"x": x2, "y": y1},
             "pC": {"x": x2, "y": y2}, "pD": {"x": x1, "y": y2},
         }}
         self._command("ZoneCleaningCapability",
                       {"action": "clean", "zones": [zone], "iterations": iterations},
-                      "nettoyage de zone")
+                      "zone")
 
     def go_to_qgis(self, point):
         x, y = q2v(point)
         self._command("GoToLocationCapability",
-                      {"action": "goto", "coordinates": {"x": x, "y": y}}, "déplacement")
+                      {"action": "goto", "coordinates": {"x": x, "y": y}}, "goto")

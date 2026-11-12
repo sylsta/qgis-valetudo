@@ -1,12 +1,14 @@
-"""Boîte de dialogue des paramètres, enregistrés dans QgsSettings.
+"""Settings dialog, stored in QgsSettings.
 
-Le mot de passe n'est jamais stocké en clair : on passe par le gestionnaire
-d'authentification de QGIS (QgsAuthConfigSelect), qui chiffre les identifiants.
+Passwords are never stored in clear text: credentials go through the QGIS
+authentication manager (QgsAuthConfigSelect), which encrypts them.
 """
 
 from qgis.PyQt.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QLineEdit, QSpinBox
 from qgis.core import QgsSettings
 from qgis.gui import QgsAuthConfigSelect
+
+from .i18n import tr
 
 KEY_URL = "valetudo/url"
 KEY_AUTH = "valetudo/authcfg"
@@ -25,7 +27,7 @@ def load_settings():
 class SettingsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Valetudo – paramètres")
+        self.setWindowTitle(tr("Valetudo – settings"))
         cfg = load_settings()
 
         self.url = QLineEdit(cfg["url"])
@@ -45,9 +47,9 @@ class SettingsDialog(QDialog):
         buttons.rejected.connect(self.reject)
 
         form = QFormLayout(self)
-        form.addRow("Adresse du robot", self.url)
-        form.addRow("Authentification (optionnel)", self.auth)
-        form.addRow("Rafraîchissement du suivi", self.interval)
+        form.addRow(tr("Robot address"), self.url)
+        form.addRow(tr("Authentication (optional)"), self.auth)
+        form.addRow(tr("Live tracking refresh"), self.interval)
         form.addRow(buttons)
 
     def accept(self):

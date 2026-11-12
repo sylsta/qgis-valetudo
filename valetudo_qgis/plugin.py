@@ -1,41 +1,54 @@
-"""Classe principale du plugin : barre d'outils, menu, liaison client <-> couches."""
+"""Main plugin class: toolbar, menu, wiring between the client and the layers."""
 
 from qgis.PyQt.QtWidgets import QAction
 from qgis.core import Qgis, QgsCoordinateReferenceSystem, QgsProject
 
 from .client import ValetudoClient
-from .map_layers import ValetudoLayers
+from .i18n import install_translator, remove_translator, tr
+from .map_layers import ValetudoLayers, layer_names
 from .settings_dialog import SettingsDialog, load_settings
 
-MENU = "&Valetudo"
+
+def command_labels():
+    """Translated labels for the command keys emitted by ValetudoClient."""
+    return {
+        "start": tr("Start"),
+        "pause": tr("Pause"),
+        "stop": tr("Stop"),
+        "home": tr("Return to dock"),
+        "segments": tr("Clean rooms"),
+        "zone": tr("Clean zone"),
+        "goto": tr("Go to"),
+    }
 
 
 class ValetudoPlugin:
     def __init__(self, iface):
         self.iface = iface
+        self.translator = install_translator()  # before any tr() call
+        self.menu = tr("&Valetudo")
         self.actions = []
         self.toolbar = None
         self.client = None
         self.layers = ValetudoLayers(QgsProject.instance())
 
     # ------------------------------------------------------------------
-    # Installation / désinstallation dans l'interface
+    # GUI setup / teardown
     # ------------------------------------------------------------------
 
     def initGui(self):
+        labels = command_labels()
         self.toolbar = self.iface.addToolBar("Valetudo")
         self.toolbar.setObjectName("ValetudoToolbar")
 
-        self._add("Paramètres…", self.configure, toolbar=False)
-        self._add("Afficher la carte", self.show_map)
-        self.act_live = self._add("Suivi en direct", self.toggle_live, checkable=True)
+        self._add(tr("Settings…"), self.configure, toolbar=False)
+        self._add(tr("Show map"), self.show_map)
+        self.act_live = self._add(tr("Live tracking"), self.toggle_live, checkable=True)
         self.toolbar.addSeparator()
-        self._add("Démarrer", lambda *_: self.control("start"))
-        self._add("Pause", lambda *_: self.control("pause"))
-        self._add("Stop", lambda *_: self.control("stop"))
-        self._add("Retour base", lambda *_: self.control("home"))
+        for key in ("start", "pause", "stop", "home"):
+            self._add(labels[key], lambda *_, k=key: self.control(k))
         self.toolbar.addSeparator()
-        self._add("Nettoyer les pièces sélectionnées", self.clean_selected)
+        self._add(tr("Clean selected rooms"), self.clean_selected)
 
     def _add(self, text, slot, checkable=False, toolbar=True):
         action = QAction(text, self.iface.mainWindow())
@@ -43,26 +56,28 @@ class ValetudoPlugin:
         action.triggered.connect(slot)
         if toolbar:
             self.toolbar.addAction(action)
-        self.iface.addPluginToMenu(MENU, action)
+        self.iface.addPluginToMenu(self.menu, action)
         self.actions.append(action)
         return action
 
     def unload(self):
         self._drop_client()
         for action in self.actions:
-            self.iface.removePluginMenu(MENU, action)
+            self.iface.removePluginMenu(self.menu, action)
         self.actions = []
         if self.toolbar:
             self.iface.mainWindow().removeToolBar(self.toolbar)
             self.toolbar.deleteLater()
             self.toolbar = None
+        remove_translator(self.translator)
+        self.translator = None
 
     # ------------------------------------------------------------------
     # Client
     # ------------------------------------------------------------------
 
     def _get_client(self):
-        """Renvoie le client, en le créant si besoin. None si pas configuré."""
+        """Return the client, creating it if needed. None if not configured."""
         if self.client:
             return self.client
         cfg = load_settings()
@@ -93,7 +108,7 @@ class ValetudoPlugin:
     def configure(self, *_):
         dlg = SettingsDialog(self.iface.mainWindow())
         if dlg.exec():
-            self._drop_client()  # les paramètres ont pu changer
+            self._drop_client()  # settings may have changed
             return True
         return False
 
@@ -120,40 +135,42 @@ class ValetudoPlugin:
     def clean_selected(self, *_):
         ids = self.layers.selected_segment_ids()
         if not ids:
-            self._message("Sélectionne une ou plusieurs pièces dans la couche "
-                          "« Valetudo - carte ».", Qgis.MessageLevel.Info)
+            self._message(
+                tr("Select one or more rooms in the “{layer}” layer.").format(
+                    layer=layer_names()["rooms"]),
+                Qgis.MessageLevel.Info)
             return
         client = self._get_client()
         if client:
             client.clean_segments(ids)
 
     # ------------------------------------------------------------------
-    # Réception des données
+    # Incoming data
     # ------------------------------------------------------------------
 
     def _on_map(self, map_json):
-        first_time = not self.layers.exists()
-        if first_time:
+        if not self.layers.exists():
             self._prepare_project()
-        created = self.layers.update(map_json)
-        if created:
+        if self.layers.update(map_json):
             canvas = self.iface.mapCanvas()
             canvas.setExtent(self.layers.layer("rooms").extent())
             canvas.refresh()
 
     def _prepare_project(self):
-        """Passe le projet en « Pas de SCR » : on travaille dans le repère du robot."""
+        """Switch the project to "No CRS": we work in the robot's own frame."""
         project = QgsProject.instance()
         if project.crs().isValid():
             project.setCrs(QgsCoordinateReferenceSystem())
-            self._message("Projet passé en « Pas de SCR » (repère local du robot, en cm).",
+            self._message(tr("Project switched to “No CRS” (robot's local frame, in cm)."),
                           Qgis.MessageLevel.Info)
 
     def _on_error(self, msg):
         self._message(msg, Qgis.MessageLevel.Warning)
 
-    def _on_command_done(self, label):
-        self._message(f"Commande « {label} » envoyée.", Qgis.MessageLevel.Success)
+    def _on_command_done(self, key):
+        label = command_labels().get(key, key)
+        self._message(tr("Command “{command}” sent.").format(command=label),
+                      Qgis.MessageLevel.Success)
 
     def _message(self, text, level):
         self.iface.messageBar().pushMessage("Valetudo", text, level=level, duration=4)

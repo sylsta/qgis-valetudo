@@ -1,4 +1,4 @@
-"""Point d'entrée appelé par QGIS au chargement du plugin."""
+"""Entry point called by QGIS when the plugin is loaded."""
 
 
 def classFactory(iface):

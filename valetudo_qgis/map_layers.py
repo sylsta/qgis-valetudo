@@ -1,8 +1,8 @@
-"""Transformation de la carte Valetudo en couches QGIS, et gestion de ces couches.
+"""Turns the Valetudo map into QGIS layers, and manages those layers.
 
-Les couches sont créées une seule fois dans un groupe "Valetudo", dans l'ordre
-robot > lignes > zones > carte. Ensuite seules les entités sont mises à jour ;
-les pièces ne sont recalculées que si la carte a changé.
+Layers are created once, in a "Valetudo" group, ordered
+robot > lines > zones > map. Afterwards only entities are refreshed; rooms
+are recomputed only when the map itself has changed.
 """
 
 from qgis.PyQt.QtCore import QMetaType
@@ -17,6 +17,7 @@ from qgis.core import (
 )
 
 from .coords import v2q
+from .i18n import tr
 
 GROUP_NAME = "Valetudo"
 AREA_ENTITIES = {"no_go_area", "no_mop_area", "active_zone"}
@@ -26,17 +27,27 @@ STR = QMetaType.Type.QString
 DBL = QMetaType.Type.Double
 
 
+def layer_names():
+    """Translated layer names, by role."""
+    return {
+        "rooms": tr("Valetudo - map"),
+        "areas": tr("Valetudo - zones"),
+        "lines": tr("Valetudo - lines"),
+        "robot": tr("Valetudo - robot"),
+    }
+
+
 # ---------------------------------------------------------------------------
-# Lecture du JSON Valetudo
+# Reading the Valetudo JSON
 # ---------------------------------------------------------------------------
 
 def _runs(layer):
-    """Segments horizontaux (x, y, longueur) en pixels."""
+    """Horizontal runs (x, y, length) in pixels."""
     cp = layer.get("compressedPixels")
     if cp is not None:
         for i in range(0, len(cp), 3):
             yield cp[i], cp[i + 1], cp[i + 2]
-    else:  # anciennes versions de Valetudo
+    else:  # older Valetudo versions
         px = layer.get("pixels", [])
         for i in range(0, len(px), 2):
             yield px[i], px[i + 1], 1
@@ -51,7 +62,7 @@ def _layer_geometry(layer, ps):
 
 
 def _signature(map_json):
-    """Empreinte légère de la carte, pour savoir s'il faut recalculer les pièces."""
+    """Cheap fingerprint of the map, to know whether rooms must be recomputed."""
     sig = []
     for layer in map_json.get("layers", []):
         meta = layer.get("metaData") or {}
@@ -84,16 +95,16 @@ def _memory_layer(geom_type, name, fields):
 
 
 # ---------------------------------------------------------------------------
-# Gestionnaire de couches
+# Layer manager
 # ---------------------------------------------------------------------------
 
 class ValetudoLayers:
     def __init__(self, project):
         self.project = project
-        self._ids = {}          # rôle -> id de couche (on ne garde PAS les objets :
-        self._signature = None  # si l'utilisateur supprime une couche, l'objet Python meurt)
+        self._ids = {}          # role -> layer id (we do NOT keep the objects:
+        self._signature = None  # if the user deletes a layer, the Python object dies)
 
-    # -- accès ----------------------------------------------------------------
+    # -- access ---------------------------------------------------------------
 
     def layer(self, role):
         lid = self._ids.get(role)
@@ -102,31 +113,31 @@ class ValetudoLayers:
     def exists(self):
         return bool(self._ids) and all(self.layer(r) for r in self._ids)
 
-    # -- cycle de vie -----------------------------------------------------------
+    # -- life cycle -----------------------------------------------------------
 
     def _create(self):
+        names = layer_names()
         layers = {
-            "rooms": _memory_layer("Polygon", "Valetudo - carte", [
+            "rooms": _memory_layer("Polygon", names["rooms"], [
                 QgsField("type", STR), QgsField("segment_id", STR), QgsField("name", STR)]),
-            "areas": _memory_layer("Polygon", "Valetudo - zones", [QgsField("type", STR)]),
-            "lines": _memory_layer("LineString", "Valetudo - lignes", [QgsField("type", STR)]),
-            "robot": _memory_layer("Point", "Valetudo - robot", [
+            "areas": _memory_layer("Polygon", names["areas"], [QgsField("type", STR)]),
+            "lines": _memory_layer("LineString", names["lines"], [QgsField("type", STR)]),
+            "robot": _memory_layer("Point", names["robot"], [
                 QgsField("type", STR), QgsField("angle", DBL)]),
         }
         self.project.addMapLayers(list(layers.values()), False)
 
         root = self.project.layerTreeRoot()
         group = root.findGroup(GROUP_NAME) or root.insertGroup(0, GROUP_NAME)
-        for role in ("robot", "lines", "areas", "rooms"):  # de haut en bas
+        for role in ("robot", "lines", "areas", "rooms"):  # top to bottom
             lyr = layers[role]
-            lyr.setCrs(QgsCoordinateReferenceSystem())     # annule un éventuel SCR par défaut
+            lyr.setCrs(QgsCoordinateReferenceSystem())     # undo any default CRS
             group.addLayer(lyr)
 
         sym = layers["robot"].renderer().symbol()
         sym.setSize(4)
         sym.setColor(QColor("red"))
-        rooms_sym = layers["rooms"].renderer().symbol()
-        rooms_sym.setOpacity(0.6)
+        layers["rooms"].renderer().symbol().setOpacity(0.6)
 
         self._ids = {role: lyr.id() for role, lyr in layers.items()}
         self._signature = None
@@ -141,13 +152,13 @@ class ValetudoLayers:
         self._ids = {}
         self._signature = None
 
-    # -- mise à jour ------------------------------------------------------------
+    # -- update ---------------------------------------------------------------
 
     def update(self, map_json):
-        """Met à jour les couches. Renvoie True si elles viennent d'être créées."""
+        """Refresh the layers. Returns True if they have just been created."""
         created = False
         if not self.exists():
-            self.remove()   # nettoie les restes si l'utilisateur en a supprimé une
+            self.remove()   # clean up leftovers if the user deleted one of them
             self._create()
             created = True
 
@@ -193,7 +204,7 @@ class ValetudoLayers:
         _replace_features(lines, line_f)
         _replace_features(robot, point_f)
 
-    # -- sélection ----------------------------------------------------------------
+    # -- selection --------------------------------------------------------------
 
     def selected_segment_ids(self):
         rooms = self.layer("rooms")

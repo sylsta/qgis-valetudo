@@ -1,45 +1,75 @@
-# Valetudo pour QGIS
+# Valetudo for QGIS
 
-Plugin d'apprentissage : affiche et pilote un robot aspirateur Valetudo dans QGIS.
+A learning project: display and control a [Valetudo](https://valetudo.cloud) robot
+vacuum from QGIS. The plugin talks to Valetudo's local REST API (no cloud).
 
-## Installation (développement)
+Available in English and French (the UI follows the QGIS interface language).
 
-1. Dans QGIS : *Préférences > Profils utilisateurs > Ouvrir le dossier du profil actif*.
-2. Aller dans `python/plugins/` (le créer s'il n'existe pas).
-3. Y copier le dossier `valetudo_qgis` de ce dépôt (ou y faire un lien symbolique
-   vers lui, pour que chaque `git pull` soit pris en compte directement).
-4. Redémarrer QGIS, puis activer « Valetudo » dans *Extensions > Installer/Gérer les extensions > Installées*.
+## Installation
 
-Conseil : installer aussi l'extension **Plugin Reloader** pour recharger le plugin
-après chaque modification du code, sans redémarrer QGIS.
+**From a build (recommended):** each push to `main` builds a ready-to-install zip,
+with compiled translations, in the *Actions* tab of this repository (artifact
+`valetudo_qgis`). Unzip the downloaded artifact once to get `valetudo_qgis.zip`,
+then in QGIS: *Plugins > Manage and Install Plugins > Install from ZIP*.
 
-## Utilisation
+**For development:**
 
-1. *Extensions > Valetudo > Paramètres…* : saisir l'adresse du robot (ex. `http://192.168.1.23`).
-2. **Afficher la carte** : crée le groupe « Valetudo » et passe le projet en « Pas de SCR ».
-3. **Suivi en direct** : rafraîchit la position du robot et sa trajectoire.
-4. Sélectionner des pièces dans « Valetudo - carte », puis **Nettoyer les pièces sélectionnées**.
+1. In QGIS: *Settings > User Profiles > Open Active Profile Folder*.
+2. Go to `python/plugins/` (create it if needed).
+3. Copy the `valetudo_qgis` folder of this repository there, or better, symlink it
+   so that every `git pull` is picked up directly.
+4. Optional, for the French UI: run `scripts/compile_translations.sh`
+   (needs Qt's `lrelease`).
+5. Restart QGIS and enable "Valetudo" in *Plugins > Manage and Install Plugins > Installed*.
 
-## Organisation du code
+Tip: install the **Plugin Reloader** plugin to reload the code after each change
+without restarting QGIS.
 
-| Fichier              | Rôle                                                        |
-|----------------------|-------------------------------------------------------------|
-| `__init__.py`        | Point d'entrée appelé par QGIS (`classFactory`)             |
-| `metadata.txt`       | Nom, version, compatibilité QGIS                            |
-| `plugin.py`          | Barre d'outils, menu, liaison entre client et couches       |
-| `client.py`          | Appels HTTP asynchrones à l'API Valetudo                    |
-| `map_layers.py`      | JSON de carte -> couches QGIS, mises à jour incrémentales    |
-| `coords.py`          | Conversion de repère (seul endroit qui inverse l'axe Y)     |
-| `settings_dialog.py` | Paramètres (URL, authentification, intervalle)              |
+## Usage
 
-## Pistes pour la suite
+1. *Plugins > Valetudo > Settings…*: enter the robot address (e.g. `http://192.168.1.23`).
+2. **Show map**: creates the "Valetudo" layer group and switches the project to "No CRS".
+3. **Live tracking**: refreshes the robot position and its path.
+4. Select rooms in the "Valetudo - map" layer, then **Clean selected rooms**.
 
-- Outil de carte (`QgsMapTool`) pour dessiner une zone de nettoyage.
-- Outil « aller ici » (clic sur la carte -> `GoToLocationCapability`).
-- Flèche orientée selon le champ `angle` du robot.
-- Remplacer le polling par le flux SSE de Valetudo.
-- Afficher batterie et état dans un dock (`/robot/state/attributes`).
+The map is displayed in the robot's own frame, in centimetres. The API reference
+is the Swagger UI embedded in the robot: `http://<robot-ip>/swagger/`.
 
-## Licence
+## Code layout
 
-GPL v2 ou ultérieure — voir [LICENSE](LICENSE).
+| File                         | Role                                                    |
+|------------------------------|---------------------------------------------------------|
+| `__init__.py`                | Entry point called by QGIS (`classFactory`)             |
+| `metadata.txt`               | Name, version, QGIS compatibility                       |
+| `plugin.py`                  | Toolbar, menu, wiring between client and layers         |
+| `client.py`                  | Asynchronous HTTP calls to the Valetudo API             |
+| `map_layers.py`              | Map JSON -> QGIS layers, incremental updates            |
+| `coords.py`                  | Frame conversion (the only place that flips the Y axis) |
+| `settings_dialog.py`         | Settings (URL, authentication, refresh interval)        |
+| `i18n.py`                    | `tr()` helper and translator loading                    |
+| `i18n/valetudo_qgis_fr.ts`   | French translation (Qt Linguist format)                 |
+
+## Translations
+
+- Every user-facing string is written in English and wrapped in `tr("...")`
+  (from `valetudo_qgis/i18n.py`), with a string literal as argument.
+  Use named placeholders and `.format()`: `tr("Command “{command}” sent.").format(command=...)`.
+- Add each new string to `valetudo_qgis/i18n/valetudo_qgis_fr.ts` (by hand or with
+  Qt Linguist).
+- `python3 scripts/check_translations.py` lists missing translations (also run in CI).
+- `scripts/compile_translations.sh` builds the `.qm` files. They are not committed.
+
+To add a language, copy the `.ts` file to `valetudo_qgis_<lang>.ts`, set its
+`language` attribute and translate the entries.
+
+## Roadmap
+
+- Map tool (`QgsMapTool`) to draw a cleaning zone.
+- "Go here" tool (click on the map -> `GoToLocationCapability`).
+- Robot marker rotated according to its `angle` field.
+- Replace polling with Valetudo's SSE stream.
+- Battery and status in a dock widget (`/robot/state/attributes`).
+
+## License
+
+GPL v2 or later — see [LICENSE](LICENSE).

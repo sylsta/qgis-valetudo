@@ -1,17 +1,17 @@
-"""Conversion de repère : Valetudo (cm, Y vers le bas) <-> QGIS (cm, Y vers le haut).
+"""Frame conversion: Valetudo (cm, Y pointing down) <-> QGIS (cm, Y pointing up).
 
-C'est le SEUL endroit du plugin qui connaît l'inversion de l'axe Y.
-Plus tard, un géoréférencement (transformation affine) viendrait se loger ici.
+This is the ONLY place in the plugin that knows about the Y-axis flip.
+Georeferencing (an affine transform) would later be added here.
 """
 
 from qgis.core import QgsPointXY
 
 
 def v2q(x, y):
-    """Coordonnées Valetudo -> point QGIS."""
+    """Valetudo coordinates -> QGIS point."""
     return QgsPointXY(x, -y)
 
 
 def q2v(pt):
-    """Point QGIS -> coordonnées Valetudo (entiers, en cm)."""
+    """QGIS point -> Valetudo coordinates (integers, in cm)."""
     return int(round(pt.x())), int(round(-pt.y()))

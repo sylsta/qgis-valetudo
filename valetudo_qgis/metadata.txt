@@ -1,0 +1,18 @@
+[general]
+name=Valetudo
+qgisMinimumVersion=3.38
+qgisMaximumVersion=4.99
+supportsQt6=True
+description=Affiche et pilote un robot aspirateur Valetudo dans QGIS
+about=Se connecte à l'API REST d'un serveur Valetudo (local, sans cloud), affiche la carte du robot dans un repère local en centimètres et permet de le piloter (démarrage, pause, retour base, nettoyage de pièces).
+version=0.1.0
+author=sylsta
+email=a.completer@example.org
+homepage=https://github.com/sylsta/qgis-valetudo
+repository=https://github.com/sylsta/qgis-valetudo
+tracker=https://github.com/sylsta/qgis-valetudo/issues
+license=GPL-2.0-or-later
+category=Plugins
+tags=valetudo,robot,aspirateur,vacuum
+experimental=True
+deprecated=False

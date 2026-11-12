@@ -1,0 +1,203 @@
+"""Transformation de la carte Valetudo en couches QGIS, et gestion de ces couches.
+
+Les couches sont créées une seule fois dans un groupe "Valetudo", dans l'ordre
+robot > lignes > zones > carte. Ensuite seules les entités sont mises à jour ;
+les pièces ne sont recalculées que si la carte a changé.
+"""
+
+from qgis.PyQt.QtCore import QMetaType
+from qgis.PyQt.QtGui import QColor
+from qgis.core import (
+    QgsCoordinateReferenceSystem,
+    QgsFeature,
+    QgsField,
+    QgsGeometry,
+    QgsRectangle,
+    QgsVectorLayer,
+)
+
+from .coords import v2q
+
+GROUP_NAME = "Valetudo"
+AREA_ENTITIES = {"no_go_area", "no_mop_area", "active_zone"}
+POINT_ENTITIES = {"robot_position", "charger_location", "go_to_target", "obstacle"}
+
+STR = QMetaType.Type.QString
+DBL = QMetaType.Type.Double
+
+
+# ---------------------------------------------------------------------------
+# Lecture du JSON Valetudo
+# ---------------------------------------------------------------------------
+
+def _runs(layer):
+    """Segments horizontaux (x, y, longueur) en pixels."""
+    cp = layer.get("compressedPixels")
+    if cp is not None:
+        for i in range(0, len(cp), 3):
+            yield cp[i], cp[i + 1], cp[i + 2]
+    else:  # anciennes versions de Valetudo
+        px = layer.get("pixels", [])
+        for i in range(0, len(px), 2):
+            yield px[i], px[i + 1], 1
+
+
+def _layer_geometry(layer, ps):
+    rects = [
+        QgsGeometry.fromRect(QgsRectangle(x * ps, -(y + 1) * ps, (x + n) * ps, -y * ps))
+        for x, y, n in _runs(layer)
+    ]
+    return QgsGeometry.unaryUnion(rects) if rects else QgsGeometry()
+
+
+def _signature(map_json):
+    """Empreinte légère de la carte, pour savoir s'il faut recalculer les pièces."""
+    sig = []
+    for layer in map_json.get("layers", []):
+        meta = layer.get("metaData") or {}
+        pixels = layer.get("compressedPixels") or layer.get("pixels") or []
+        sig.append((layer.get("type"), meta.get("segmentId"), meta.get("name"), len(pixels)))
+    return tuple(sig)
+
+
+def _feature(lyr, geom, attrs):
+    f = QgsFeature(lyr.fields())
+    f.setGeometry(geom)
+    f.setAttributes(attrs)
+    return f
+
+
+def _replace_features(lyr, feats):
+    pr = lyr.dataProvider()
+    pr.truncate()
+    pr.addFeatures(feats)
+    lyr.updateExtents()
+    lyr.triggerRepaint()
+
+
+def _memory_layer(geom_type, name, fields):
+    lyr = QgsVectorLayer(geom_type, name, "memory")
+    lyr.setCrs(QgsCoordinateReferenceSystem())
+    lyr.dataProvider().addAttributes(fields)
+    lyr.updateFields()
+    return lyr
+
+
+# ---------------------------------------------------------------------------
+# Gestionnaire de couches
+# ---------------------------------------------------------------------------
+
+class ValetudoLayers:
+    def __init__(self, project):
+        self.project = project
+        self._ids = {}          # rôle -> id de couche (on ne garde PAS les objets :
+        self._signature = None  # si l'utilisateur supprime une couche, l'objet Python meurt)
+
+    # -- accès ----------------------------------------------------------------
+
+    def layer(self, role):
+        lid = self._ids.get(role)
+        return self.project.mapLayer(lid) if lid else None
+
+    def exists(self):
+        return bool(self._ids) and all(self.layer(r) for r in self._ids)
+
+    # -- cycle de vie -----------------------------------------------------------
+
+    def _create(self):
+        layers = {
+            "rooms": _memory_layer("Polygon", "Valetudo - carte", [
+                QgsField("type", STR), QgsField("segment_id", STR), QgsField("name", STR)]),
+            "areas": _memory_layer("Polygon", "Valetudo - zones", [QgsField("type", STR)]),
+            "lines": _memory_layer("LineString", "Valetudo - lignes", [QgsField("type", STR)]),
+            "robot": _memory_layer("Point", "Valetudo - robot", [
+                QgsField("type", STR), QgsField("angle", DBL)]),
+        }
+        self.project.addMapLayers(list(layers.values()), False)
+
+        root = self.project.layerTreeRoot()
+        group = root.findGroup(GROUP_NAME) or root.insertGroup(0, GROUP_NAME)
+        for role in ("robot", "lines", "areas", "rooms"):  # de haut en bas
+            lyr = layers[role]
+            lyr.setCrs(QgsCoordinateReferenceSystem())     # annule un éventuel SCR par défaut
+            group.addLayer(lyr)
+
+        sym = layers["robot"].renderer().symbol()
+        sym.setSize(4)
+        sym.setColor(QColor("red"))
+        rooms_sym = layers["rooms"].renderer().symbol()
+        rooms_sym.setOpacity(0.6)
+
+        self._ids = {role: lyr.id() for role, lyr in layers.items()}
+        self._signature = None
+
+    def remove(self):
+        ids = [lid for lid in self._ids.values() if self.project.mapLayer(lid)]
+        if ids:
+            self.project.removeMapLayers(ids)
+        group = self.project.layerTreeRoot().findGroup(GROUP_NAME)
+        if group is not None and not group.children():
+            group.parent().removeChildNode(group)
+        self._ids = {}
+        self._signature = None
+
+    # -- mise à jour ------------------------------------------------------------
+
+    def update(self, map_json):
+        """Met à jour les couches. Renvoie True si elles viennent d'être créées."""
+        created = False
+        if not self.exists():
+            self.remove()   # nettoie les restes si l'utilisateur en a supprimé une
+            self._create()
+            created = True
+
+        sig = _signature(map_json)
+        if sig != self._signature:
+            self._signature = sig
+            self._update_rooms(map_json)
+        self._update_entities(map_json)
+        return created
+
+    def _update_rooms(self, map_json):
+        rooms = self.layer("rooms")
+        default_ps = map_json.get("pixelSize", 5)
+        feats = []
+        for layer in map_json.get("layers", []):
+            meta = layer.get("metaData") or {}
+            geom = _layer_geometry(layer, layer.get("pixelSize", default_ps))
+            if not geom.isEmpty():
+                feats.append(_feature(rooms, geom, [
+                    layer.get("type"),
+                    str(meta["segmentId"]) if meta.get("segmentId") is not None else None,
+                    meta.get("name"),
+                ]))
+        _replace_features(rooms, feats)
+
+    def _update_entities(self, map_json):
+        areas, lines, robot = self.layer("areas"), self.layer("lines"), self.layer("robot")
+        area_f, line_f, point_f = [], [], []
+        for ent in map_json.get("entities", []):
+            etype = ent.get("type")
+            c = ent.get("points", [])
+            pts = [v2q(c[i], c[i + 1]) for i in range(0, len(c) - 1, 2)]
+            if not pts:
+                continue
+            if etype in POINT_ENTITIES or len(pts) == 1:
+                angle = (ent.get("metaData") or {}).get("angle")
+                point_f.append(_feature(robot, QgsGeometry.fromPointXY(pts[0]), [etype, angle]))
+            elif etype in AREA_ENTITIES:
+                area_f.append(_feature(areas, QgsGeometry.fromPolygonXY([pts + [pts[0]]]), [etype]))
+            else:  # path, predicted_path, virtual_wall...
+                line_f.append(_feature(lines, QgsGeometry.fromPolylineXY(pts), [etype]))
+        _replace_features(areas, area_f)
+        _replace_features(lines, line_f)
+        _replace_features(robot, point_f)
+
+    # -- sélection ----------------------------------------------------------------
+
+    def selected_segment_ids(self):
+        rooms = self.layer("rooms")
+        if rooms is None:
+            return []
+        return [f["segment_id"] for f in rooms.selectedFeatures()
+                if f["type"] == "segment" and f["segment_id"]]

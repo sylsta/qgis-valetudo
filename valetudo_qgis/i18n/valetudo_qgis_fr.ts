@@ -811,5 +811,21 @@ Un nettoyage en cours sera interrompu. Le robot sera injoignable pendant une ou 
         <source>Info</source>
         <translation>Infos</translation>
     </message>
+    <message>
+        <source>Locate robot (beep)</source>
+        <translation>Localiser le robot (bip)</translation>
+    </message>
+    <message>
+        <source>Empty dust bin</source>
+        <translation>Vider le bac à poussière</translation>
+    </message>
+    <message>
+        <source>Wash mops</source>
+        <translation>Laver les serpillières</translation>
+    </message>
+    <message>
+        <source>Dry mops</source>
+        <translation>Sécher les serpillières</translation>
+    </message>
 </context>
 </TS>

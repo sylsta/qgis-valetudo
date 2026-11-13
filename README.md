@@ -37,7 +37,8 @@ without restarting QGIS.
 
 7. **Status panel**: a dockable panel. Always visible at the top: connection,
    robot model, a coloured state badge, the battery, any robot error, and the
-   command list (Start … Go here and Reboot robot: pick one and click Run).
+   command list (Start … Go here, Locate robot, Empty dust bin, Wash mops,
+   Dry mops, Reboot robot: pick one and click Run).
    Below, four tabs (the last one used is remembered):
    - **Robot**: state details, dock station (fresh and waste water tanks,
      detergent, dust bag), fan speed and water usage (editable), attachments,

@@ -35,14 +35,20 @@ REQUIRED_CAPABILITY = {
     "clean_rooms": "MapSegmentationCapability",
     "zone": "ZoneCleaningCapability",
     "goto": "GoToLocationCapability",
+    "locate": "LocateCapability",
+    "empty_dock": "AutoEmptyDockManualTriggerCapability",
+    "mop_wash": "MopDockCleanManualTriggerCapability",
+    "mop_dry": "MopDockDryManualTriggerCapability",
 }
+
+DOCK_ROW = ["locate", "empty_dock", "mop_wash", "mop_dry"]   # menu and panel list
 
 # Layout, None = separator. The panel shows the robot and map rows.
 ROBOT_ROW = ["start", "pause", "stop", "home"]
 MAP_ROW = ["show_map", "live", None, "clean_rooms", "zone", "goto"]
 TOOLBAR = ["show_map", "live", None] + ROBOT_ROW + [None, "clean_rooms", "zone", "goto",
                                                     None, "status_panel"]
-MENU = ["settings", "status_panel"] + MAP_ROW + ROBOT_ROW + [None, "reboot"]
+MENU = ["settings", "status_panel"] + MAP_ROW + ROBOT_ROW + [None] + DOCK_ROW + [None, "reboot"]
 PANEL_SYSTEM_ROW = ["reboot"]   # reboot: menu and panel command list, not the toolbar
 
 
@@ -59,6 +65,10 @@ def command_labels():
         "fan_speed": tr("Fan speed"),
         "water_usage": tr("Water usage"),
         "camera_light": tr("Camera light"),
+        "locate": tr("Locate robot (beep)"),
+        "empty_dock": tr("Empty dust bin"),
+        "mop_wash": tr("Wash mops"),
+        "mop_dry": tr("Dry mops"),
     }
 
 
@@ -103,6 +113,10 @@ class ValetudoPlugin:
         self._new_action("clean_rooms", tr("Clean selected rooms"), self.clean_selected)
         self._new_action("zone", labels["zone"], self.activate_zone_tool, checkable=True)
         self._new_action("goto", tr("Go here"), self.activate_goto_tool, checkable=True)
+        dock_labels = {"locate": tr("Locate robot (beep)"), "empty_dock": tr("Empty dust bin"),
+                       "mop_wash": tr("Wash mops"), "mop_dry": tr("Dry mops")}
+        for key in DOCK_ROW:
+            self._new_action(key, dock_labels[key], lambda *_, k=key: self.simple_command(k))
         self._new_action("reboot", tr("Reboot robot (SSH)…"), self.reboot_robot)
         self._reboot = SshReboot()
         self._reboot.finished.connect(self._on_reboot_finished)
@@ -126,7 +140,8 @@ class ValetudoPlugin:
             if key is not None:
                 self.iface.addPluginToMenu(self.menu, self.act[key])
         # Reboot asks for confirmation, so it can safely sit in the same list.
-        self.panel.set_actions([self.act[k] for k in ROBOT_ROW + MAP_ROW + PANEL_SYSTEM_ROW if k])
+        self.panel.set_actions(
+            [self.act[k] for k in ROBOT_ROW + MAP_ROW + DOCK_ROW + PANEL_SYSTEM_ROW if k])
 
         canvas = self.iface.mapCanvas()
         self.zone_tool = ZoneMapTool(canvas)
@@ -311,6 +326,11 @@ class ValetudoPlugin:
         client = self._get_client()
         if client:
             client.basic_control(action)
+
+    def simple_command(self, key):
+        client = self._get_client()
+        if client:
+            client.simple_command(key)
 
     def clean_selected(self, *_):
         ids = self.layers.selected_segment_ids()

@@ -16,7 +16,16 @@ from qgis.core import QgsApplication, QgsNetworkAccessManager, QgsPointXY
 from .coords import q2v
 
 COMMAND_KEYS = ("start", "pause", "stop", "home", "segments", "zone", "goto",
-                "fan_speed", "water_usage", "camera_light")
+                "fan_speed", "water_usage", "camera_light",
+                "locate", "empty_dock", "mop_wash", "mop_dry")
+
+# One-shot dock/robot commands: key -> (capability, payload).
+SIMPLE_COMMANDS = {
+    "locate": ("LocateCapability", {"action": "locate"}),
+    "empty_dock": ("AutoEmptyDockManualTriggerCapability", {"action": "trigger"}),
+    "mop_wash": ("MopDockCleanManualTriggerCapability", {"action": "start"}),
+    "mop_dry": ("MopDockDryManualTriggerCapability", {"action": "start"}),
+}
 
 # On/off capabilities handled by fetch_toggle() / set_toggle(), with their command key.
 TOGGLE_CAPABILITIES = {
@@ -189,6 +198,11 @@ class ValetudoClient(QObject):
     def _command(self, capability, payload, key, path_suffix=""):
         self._put(f"/robot/capabilities/{capability}{path_suffix}", payload,
                   lambda _data: self.commandDone.emit(key))
+
+    def simple_command(self, key):
+        """Run a one-shot command from SIMPLE_COMMANDS (locate, empty dock, wash/dry mops)."""
+        capability, payload = SIMPLE_COMMANDS[key]
+        self._command(capability, payload, key)
 
     def basic_control(self, action):
         """action: 'start', 'stop', 'pause' or 'home'."""

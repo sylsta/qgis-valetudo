@@ -56,18 +56,6 @@
         <translation>Paramètres…</translation>
     </message>
     <message>
-        <source>Show map</source>
-        <translation>Afficher la carte</translation>
-    </message>
-    <message>
-        <source>Live tracking</source>
-        <translation>Suivi en direct</translation>
-    </message>
-    <message>
-        <source>Clean selected rooms</source>
-        <translation>Nettoyer les pièces sélectionnées</translation>
-    </message>
-    <message>
         <source>Project switched to “No CRS” (robot's local frame, in cm).</source>
         <translation>Projet passé en « Pas de SCR » (repère local du robot, en cm).</translation>
     </message>
@@ -800,10 +788,6 @@ Un nettoyage en cours sera interrompu. Le robot sera injoignable pendant une ou 
         <translation>Entretien</translation>
     </message>
     <message>
-        <source>Info</source>
-        <translation>Infos</translation>
-    </message>
-    <message>
         <source>Locate robot (beep)</source>
         <translation>Localiser le robot (bip)</translation>
     </message>
@@ -930,10 +914,6 @@ Ils remplacent toutes les restrictions actuellement sur le robot.</translation>
         <translation>Fin du journal de Valetudo :</translation>
     </message>
     <message>
-        <source>Run</source>
-        <translation>Exécuter</translation>
-    </message>
-    <message>
         <source>Test connection</source>
         <translation>Tester la connexion</translation>
     </message>
@@ -1014,28 +994,8 @@ Continuer ?</translation>
         <translation>Le robot n'a pas atteint le point en {minutes} min.</translation>
     </message>
     <message>
-        <source>Start a full cleaning.</source>
-        <translation>Lance un nettoyage complet.</translation>
-    </message>
-    <message>
-        <source>Cleans the rooms ticked in the Robot tab (or selected on the map).</source>
-        <translation>Nettoie les pièces cochées dans l'onglet Robot (ou sélectionnées sur la carte).</translation>
-    </message>
-    <message>
-        <source>After Run, drag a rectangle on the map: that zone is cleaned.</source>
-        <translation>Après Exécuter, tracez un rectangle sur la carte : cette zone est nettoyée.</translation>
-    </message>
-    <message>
-        <source>After Run, click a point on the map: the robot goes there.</source>
-        <translation>Après Exécuter, cliquez un point sur la carte : le robot s'y rend.</translation>
-    </message>
-    <message>
         <source>Pause the current job.</source>
         <translation>Met en pause la tâche en cours.</translation>
-    </message>
-    <message>
-        <source>Stop the current job.</source>
-        <translation>Arrête la tâche en cours.</translation>
     </message>
     <message>
         <source>Send the robot back to its dock.</source>
@@ -1044,14 +1004,6 @@ Continuer ?</translation>
     <message>
         <source>The robot beeps, to find it.</source>
         <translation>Le robot émet un bip, pour le retrouver.</translation>
-    </message>
-    <message>
-        <source>Load the robot's map into QGIS.</source>
-        <translation>Charge la carte du robot dans QGIS.</translation>
-    </message>
-    <message>
-        <source>Refresh the robot position on the map every few seconds.</source>
-        <translation>Actualise la position du robot sur la carte toutes les quelques secondes.</translation>
     </message>
     <message>
         <source>Load no-go zones and walls as layers you can edit.</source>
@@ -1074,36 +1026,8 @@ Continuer ?</translation>
         <translation>Sèche les serpillières dans la base.</translation>
     </message>
     <message>
-        <source>Follow the robot's startup; the log is in the Info tab.</source>
-        <translation>Suit le démarrage du robot ; le journal est dans l'onglet Infos.</translation>
-    </message>
-    <message>
         <source>Reboot the robot over SSH (asks first).</source>
         <translation>Redémarre le robot via SSH (demande d'abord).</translation>
-    </message>
-    <message>
-        <source>Robot address, camera, notifications, SSH.</source>
-        <translation>Adresse du robot, caméra, notifications, SSH.</translation>
-    </message>
-    <message>
-        <source>Map</source>
-        <translation>Carte</translation>
-    </message>
-    <message>
-        <source>System</source>
-        <translation>Système</translation>
-    </message>
-    <message>
-        <source>Tick rooms in the Robot tab, or select them in the “{layer}” layer.</source>
-        <translation>Cochez des pièces dans l'onglet Robot, ou sélectionnez-les dans la couche « {layer} ».</translation>
-    </message>
-    <message>
-        <source>Follow the robot</source>
-        <translation>Suivre le robot</translation>
-    </message>
-    <message>
-        <source>Keep the robot in view on the map (turns on live tracking).</source>
-        <translation>Garde le robot visible sur la carte (active le suivi en direct).</translation>
     </message>
     <message>
         <source>Walls</source>
@@ -1128,6 +1052,66 @@ Continuer ?</translation>
     <message>
         <source>Zone being cleaned</source>
         <translation>Zone en cours de nettoyage</translation>
+    </message>
+    <message>
+        <source>Start cleaning the whole home.</source>
+        <translation>Lance le nettoyage de tout le logement.</translation>
+    </message>
+    <message>
+        <source>Click, then drag a rectangle on the map: that zone is cleaned.</source>
+        <translation>Cliquez, puis tracez un rectangle sur la carte : cette zone est nettoyée.</translation>
+    </message>
+    <message>
+        <source>Click, then click a point on the map: the robot goes there.</source>
+        <translation>Cliquez, puis cliquez un point sur la carte : le robot s'y rend.</translation>
+    </message>
+    <message>
+        <source>Show the robot's map in QGIS and follow the robot live.</source>
+        <translation>Affiche la carte du robot dans QGIS et suit le robot en direct.</translation>
+    </message>
+    <message>
+        <source>Follow the robot's startup; the log is below.</source>
+        <translation>Suit le démarrage du robot ; le journal est en dessous.</translation>
+    </message>
+    <message>
+        <source>Clean a zone…</source>
+        <translation>Nettoyer une zone…</translation>
+    </message>
+    <message>
+        <source>Clean everything</source>
+        <translation>Tout nettoyer</translation>
+    </message>
+    <message>
+        <source>Go to…</source>
+        <translation>Aller à…</translation>
+    </message>
+    <message>
+        <source>Show on map</source>
+        <translation>Afficher sur la carte</translation>
+    </message>
+    <message>
+        <source>Empty bin</source>
+        <translation>Vider le bac</translation>
+    </message>
+    <message>
+        <source>Clean</source>
+        <translation>Nettoyer</translation>
+    </message>
+    <message>
+        <source>Clean ticked rooms ({n})</source>
+        <translation>Nettoyer les pièces cochées ({n})</translation>
+    </message>
+    <message>
+        <source>Tick rooms in the list above, then click here.</source>
+        <translation>Cochez des pièces dans la liste ci-dessus, puis cliquez ici.</translation>
+    </message>
+    <message>
+        <source>Advanced</source>
+        <translation>Avancé</translation>
+    </message>
+    <message>
+        <source>Tools</source>
+        <translation>Outils</translation>
     </message>
 </context>
 </TS>

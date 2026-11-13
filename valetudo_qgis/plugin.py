@@ -45,9 +45,7 @@ ALTERNATIVE_CAPABILITIES = {
 REQUIRED_CAPABILITY = {
     "start": "BasicControlCapability",
     "pause": "BasicControlCapability",
-    "stop": "BasicControlCapability",
     "home": "BasicControlCapability",
-    "clean_rooms": "MapSegmentationCapability",
     "zone": "ZoneCleaningCapability",
     "goto": "GoToLocationCapability",
     "locate": "LocateCapability",
@@ -58,42 +56,32 @@ REQUIRED_CAPABILITY = {
     "send_restrictions": "CombinedVirtualRestrictionsCapability",
 }
 
-RESTRICTIONS_ROW = ["edit_restrictions", "send_restrictions"]   # menu and panel list
 
-DOCK_ROW = ["locate", "empty_dock", "mop_wash", "mop_dry"]   # menu and panel list
 
 # Layout, None = separator. The panel shows the robot and map rows.
-ROBOT_ROW = ["start", "pause", "stop", "home"]
-MAP_ROW = ["show_map", "live", None, "clean_rooms", "zone", "goto"]
 # Simple menu and toolbar: everything else is in the panel's command list.
 TOOLBAR = ["status_panel"]
 MENU = ["status_panel", "settings"]
-PANEL_SYSTEM_ROW = ["watch_boot", "reboot"]   # menu and panel command list, not the toolbar
 LOG_TAG = "Valetudo"   # tab of the QGIS "Log Messages" panel
 
 
 def command_hints():
-    """One line per command: what it does, or what to do after Run."""
+    """Tooltip of each button: what it does, and what to do next for map tools."""
     return {
-        "start": tr("Start a full cleaning."),
-        "clean_rooms": tr("Cleans the rooms ticked in the Robot tab (or selected on the map)."),
-        "zone": tr("After Run, drag a rectangle on the map: that zone is cleaned."),
-        "goto": tr("After Run, click a point on the map: the robot goes there."),
+        "start": tr("Start cleaning the whole home."),
+        "zone": tr("Click, then drag a rectangle on the map: that zone is cleaned."),
+        "goto": tr("Click, then click a point on the map: the robot goes there."),
         "pause": tr("Pause the current job."),
-        "stop": tr("Stop the current job."),
         "home": tr("Send the robot back to its dock."),
         "locate": tr("The robot beeps, to find it."),
-        "show_map": tr("Load the robot's map into QGIS."),
-        "live": tr("Refresh the robot position on the map every few seconds."),
-        "follow": tr("Keep the robot in view on the map (turns on live tracking)."),
+        "live": tr("Show the robot's map in QGIS and follow the robot live."),
         "edit_restrictions": tr("Load no-go zones and walls as layers you can edit."),
         "send_restrictions": tr("Send the edited no-go zones and walls to the robot."),
         "empty_dock": tr("Empty the robot's dust bin into the dock."),
         "mop_wash": tr("Wash the mops in the dock."),
         "mop_dry": tr("Dry the mops in the dock."),
-        "watch_boot": tr("Follow the robot's startup; the log is in the Info tab."),
+        "watch_boot": tr("Follow the robot's startup; the log is below."),
         "reboot": tr("Reboot the robot over SSH (asks first)."),
-        "settings": tr("Robot address, camera, notifications, SSH."),
     }
 
 
@@ -148,7 +136,7 @@ class ValetudoPlugin:
         action = QAction(text, self.iface.mainWindow())
         if has_icon(key):
             action.setIcon(icon(key))
-        action.setToolTip(text)
+        action.setToolTip(command_hints().get(key, text))
         action.setCheckable(checkable)
         if slot is not None:
             action.triggered.connect(slot)
@@ -160,17 +148,17 @@ class ValetudoPlugin:
         win = self.iface.mainWindow()
 
         self._new_action("settings", tr("Settings…"), self.configure)
-        self._new_action("show_map", tr("Show map"), self.show_map)
-        self._new_action("live", tr("Live tracking"), self.toggle_live, checkable=True)
-        self._new_action("follow", tr("Follow the robot"), self.toggle_follow, checkable=True)
-        for key in ROBOT_ROW:
-            self._new_action(key, labels[key], lambda *_, k=key: self.control(k))
-        self._new_action("clean_rooms", tr("Clean selected rooms"), self.clean_selected)
-        self._new_action("zone", labels["zone"], self.activate_zone_tool, checkable=True)
-        self._new_action("goto", tr("Go here"), self.activate_goto_tool, checkable=True)
-        dock_labels = {"locate": tr("Locate robot (beep)"), "empty_dock": tr("Empty dust bin"),
+        # One switch for the map: load it, track the robot live and keep it in view.
+        self._new_action("live", tr("Show on map"), self.toggle_live, checkable=True)
+        self.act["live"].setIcon(icon("show_map"))
+        self._new_action("start", tr("Clean everything"), lambda *_: self.control("start"))
+        self._new_action("pause", labels["pause"], lambda *_: self.control("pause"))
+        self._new_action("home", tr("Dock"), lambda *_: self.control("home"))
+        self._new_action("zone", tr("Clean a zone…"), self.activate_zone_tool, checkable=True)
+        self._new_action("goto", tr("Go to…"), self.activate_goto_tool, checkable=True)
+        dock_labels = {"locate": tr("Locate"), "empty_dock": tr("Empty bin"),
                        "mop_wash": tr("Wash mops"), "mop_dry": tr("Dry mops")}
-        for key in DOCK_ROW:
+        for key in ("locate", "empty_dock", "mop_wash", "mop_dry"):
             self._new_action(key, dock_labels[key], lambda *_, k=key: self.simple_command(k))
         self._new_action("edit_restrictions", tr("Edit no-go zones and walls"),
                          self.edit_restrictions)
@@ -206,22 +194,7 @@ class ValetudoPlugin:
             if key is not None:
                 self.iface.addPluginToMenu(self.menu, self.act[key])
         # Frequent commands as icon buttons; the others in the panel's "More" menu.
-        hints = command_hints()
-        for key, action in self.act.items():
-            if key in hints:
-                action.setStatusTip(hints[key])
-        groups = [
-            (tr("Cleaning"), ["start", "clean_rooms", "zone", "goto"]),
-            (tr("Robot"), ["pause", "stop", "home", "locate"]),
-            (tr("Map"), ["show_map", "live", "follow", "edit_restrictions",
-                         "send_restrictions"]),
-            (tr("Dock station"), ["empty_dock", "mop_wash", "mop_dry"]),
-            (tr("System"), ["watch_boot", "reboot", "settings"]),
-        ]
-        self.panel.set_actions(
-            [(title, [self.act[k] for k in keys if k in self.act]) for title, keys in groups],
-            quick=[self.act[k] for k in ("start", "pause", "home")],
-            room_action=self.act["clean_rooms"])
+        self.panel.bind_actions(self.act)
 
         canvas = self.iface.mapCanvas()
         self.zone_tool = ZoneMapTool(canvas)
@@ -348,7 +321,7 @@ class ValetudoPlugin:
             if not ok and action.isChecked():
                 self.iface.actionPan().trigger()   # leave a map tool that became unsupported
             action.setEnabled(ok)
-            action.setToolTip(action.text() if ok else
+            action.setToolTip(command_hints().get(key, action.text()) if ok else
                               f"{action.text()} — {tr('Not supported by this robot.')}")
 
     def _on_reachable(self, ok):
@@ -411,21 +384,6 @@ class ValetudoPlugin:
             self.panel.camera.restart_if_running()
         return True
 
-    def show_map(self, *_):
-        client = self._get_client()
-        if client:
-            client.fetch_map()
-
-    def toggle_follow(self, checked):
-        """Follow needs live positions: turn live tracking on with it."""
-        if checked and not self.act["live"].isChecked():
-            self.act["live"].trigger()
-            if not self.act["live"].isChecked():   # no robot configured
-                self.act["follow"].setChecked(False)
-                return
-        if checked:
-            self._center_on_robot(self._last_map, force=True)
-
     def _center_on_robot(self, map_json, force=False):
         """Recentre on the robot when it leaves the middle of the view (no constant jitter)."""
         if not map_json:
@@ -443,8 +401,6 @@ class ValetudoPlugin:
                 return
 
     def toggle_live(self, checked):
-        if not checked and "follow" in self.act:
-            self.act["follow"].setChecked(False)   # nothing to follow without live positions
         client = self._get_client()
         if not client:
             self.act["live"].setChecked(False)
@@ -555,19 +511,6 @@ class ValetudoPlugin:
         client = self._get_client()
         if client:
             client.simple_command(key)
-
-    def clean_selected(self, *_):
-        ids = (self.panel.checked_room_ids() if self.panel is not None else []) \
-            or self.layers.selected_segment_ids()
-        if not ids:
-            self._message(
-                tr("Tick rooms in the Robot tab, or select them in the “{layer}” layer.")
-                .format(layer=layer_names()["rooms"]),
-                Qgis.MessageLevel.Info)
-            return
-        client = self._get_client()
-        if client:
-            client.clean_segments(ids)
 
     # -- map tools --------------------------------------------------------------
 
@@ -765,8 +708,8 @@ class ValetudoPlugin:
             canvas = self.iface.mapCanvas()
             canvas.setExtent(self.layers.layer("rooms").extent())
             canvas.refresh()
-        if self.act.get("follow") is not None and self.act["follow"].isChecked():
-            self._center_on_robot(map_json)
+        if self.act.get("live") is not None and self.act["live"].isChecked():
+            self._center_on_robot(map_json)   # keep the robot in view while tracking
 
     def _prepare_project(self):
         """Switch the project to "No CRS": we work in the robot's own frame."""

@@ -34,33 +34,38 @@ without restarting QGIS.
 
 The panel, from top to bottom:
 
-- **Header**, always visible: connection, robot model, a coloured state badge, the
-  battery, any robot error.
-- **Quick buttons**: Start, Pause, Return to dock.
-- **Command list + Run**, grouped under headers (Cleaning, Robot, Map, Dock
-  station, System). A line under the list says what the selected command does,
-  or what to do after Run; it then shows the result. Switched-on commands show a
-  ✓; unsupported ones are greyed out.
-  - *Clean selected rooms*: tick rooms in the **Rooms** list of the Robot tab (or
-    select them in the "Valetudo - map" layer).
-  - *Clean zone*: then drag a rectangle on the map.
-  - *Go here*: then click on the map. Robots without Valetudo's go-to (e.g.
-    Eureka J15 Pro Ultra) get an emulation: a 60 cm zone clean at that spot, then
-    a pause as soon as the robot is within 50 cm (it cleans on its way; a
-    first-time confirmation says so).
-- **Four tabs** (the last one used is remembered):
-  - **Robot**: rooms checklist, state details, dock station (fresh and waste water tanks,
-    detergent, dust bag), fan speed and water usage (editable), attachments,
-    position (read by the panel itself, no need to show the map);
-  - **Camera**: live video, plays only while this tab is shown; camera light;
-  - **Maintenance**: consumables, current and total statistics;
-  - **Info**: Wi-Fi, recent events, supported features, boot log.
+```
+Eureka J15 Pro Ultra · Connected        [Docked]
+████████████████████ 99 %
+⚠ error, only when there is one
+┌ Clean ─────────────────────────────────────┐
+│ ☐ Kitchen  ☐ Hallway  …   (robot's rooms)  │
+│ [Clean everything] [Clean ticked rooms (2)]│
+│ [Clean a zone…]    [Go to…]                │
+└────────────────────────────────────────────┘
+┌ Robot ─────────────────────────────────────┐
+│ [Pause]   [Dock]   [Locate]                │
+└────────────────────────────────────────────┘
+┌ Dock station ── (only if supported) ───────┐
+│ [Empty bin] [Wash mops] [Dry mops]         │
+└────────────────────────────────────────────┘
+[Show on map]     map + live tracking + robot kept in view
+Result of the last command
+Robot · Camera · Maintenance · Advanced   (tabs)
+```
 
-**Map style**: each room gets its own soft colour and a bold label with its name,
-walls are dark, the floor light grey; the robot's path is a thin translucent blue
-line (planned path dashed), virtual walls thick red, no-go / no-mop zones hatched
-red / blue. **Follow the robot** (Map group of the command list) keeps the robot
-in view during live tracking, recentring only when it nears the edge of the view.
+- Every button does one thing; its tooltip says what. *Clean a zone…* and *Go to…*
+  stay pressed until you have drawn the zone or clicked the point on the map.
+- Rooms are chosen only in the list; the button says how many are ticked.
+- **Show on map** loads the map, refreshes the robot live and keeps it in view
+  (recentring only when it nears the edge). Click again to stop.
+- **Tabs**: Robot (state details, dock station states, fan speed and water usage,
+  attachments, position), Camera (live video, plays only while this tab is shown;
+  camera light), Maintenance (consumables, statistics), Advanced (tools: no-go
+  zones and walls, watch boot, reboot; Wi-Fi, events, boot log, features).
+- **Go to…** on robots without Valetudo's go-to (e.g. Eureka J15 Pro Ultra): a 60 cm
+  zone clean at that spot, then a pause as soon as the robot is within 50 cm (it
+  cleans on its way; a first-time confirmation says so).
 
 The panel refreshes itself while visible (every 5 s while the robot works, every
 30 s otherwise), even when the robot is docked. Sections fold with their arrow

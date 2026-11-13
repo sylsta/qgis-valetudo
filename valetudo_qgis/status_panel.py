@@ -24,11 +24,13 @@ from qgis.PyQt.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from qgis.core import QgsApplication
+from qgis.core import QgsApplication, QgsSettings
 from qgis.gui import QgsDockWidget
 
+from .camera_widget import CameraWidget
 from .i18n import tr
 
+KEY_CAMERA_OPEN = "valetudo/camera_section_open"
 ACTIVE_INTERVAL_MS = 5_000
 IDLE_INTERVAL_MS = 30_000
 ACTIVE_STATES = {"cleaning", "returning", "moving", "manual_control"}
@@ -253,6 +255,17 @@ class ValetudoPanel(QgsDockWidget):
         self._actions_grid.setContentsMargins(0, 0, 0, 0)
         self._layout.addWidget(self._actions_widget)
 
+        # Camera: plays while the panel is visible and this section is ticked.
+        self.box_camera = QGroupBox(tr("Camera"))
+        self.box_camera.setCheckable(True)
+        self.box_camera.setChecked(QgsSettings().value(KEY_CAMERA_OPEN, True, type=bool))
+        camera_layout = QVBoxLayout(self.box_camera)
+        self.camera = CameraWidget()
+        camera_layout.addWidget(self.camera)
+        self.camera.setVisible(self.box_camera.isChecked())
+        self.box_camera.toggled.connect(self._on_camera_toggled)
+        self._layout.addWidget(self.box_camera)
+
         # Status
         self.box_status, form = self._section(tr("Status"))
         self.lbl_state = self._value_label()
@@ -397,7 +410,25 @@ class ValetudoPanel(QgsDockWidget):
             self.refresh()
             self._timer.start()
 
+    def _on_camera_toggled(self, checked):
+        QgsSettings().setValue(KEY_CAMERA_OPEN, checked)
+        self.camera.setVisible(checked)
+        self._update_camera()
+
+    def _update_camera(self):
+        """Play only while the panel is visible and the camera section is ticked."""
+        if self.isVisible() and self.box_camera.isChecked():
+            if not self.camera.stream.is_running():
+                self.camera.play()
+        else:
+            self.camera.stop()
+
+    def shutdown(self):
+        """Called by the plugin on unload."""
+        self.camera.shutdown()
+
     def _on_visibility(self, visible):
+        self._update_camera()
         if not visible:
             self._timer.stop()
             self._age_timer.stop()

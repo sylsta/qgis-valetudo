@@ -480,10 +480,6 @@
         <translation>Caméra</translation>
     </message>
     <message>
-        <source>Valetudo camera</source>
-        <translation>Caméra Valetudo</translation>
-    </message>
-    <message>
         <source>Save snapshot</source>
         <translation>Enregistrer une capture</translation>
     </message>

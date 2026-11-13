@@ -9,7 +9,6 @@ from qgis.PyQt.QtCore import Qt, QTimer, QUrl
 from qgis.PyQt.QtWidgets import QAction, QMessageBox
 from qgis.core import Qgis, QgsCoordinateReferenceSystem, QgsProject
 
-from .camera_panel import CameraPanel
 from .client import ValetudoClient
 from .i18n import install_translator, remove_translator, tr
 from .map_layers import ValetudoLayers, layer_names
@@ -42,8 +41,8 @@ REQUIRED_CAPABILITY = {
 ROBOT_ROW = ["start", "pause", "stop", "home"]
 MAP_ROW = ["show_map", "live", None, "clean_rooms", "zone", "goto"]
 TOOLBAR = ["show_map", "live", None] + ROBOT_ROW + [None, "clean_rooms", "zone", "goto",
-                                                    None, "status_panel", "camera"]
-MENU = ["settings", "status_panel", "camera"] + MAP_ROW + ROBOT_ROW + [None, "reboot"]
+                                                    None, "status_panel"]
+MENU = ["settings", "status_panel"] + MAP_ROW + ROBOT_ROW + [None, "reboot"]
 PANEL_SYSTEM_ROW = ["reboot"]   # reboot: menu and panel, not the toolbar
 
 
@@ -74,7 +73,7 @@ class ValetudoPlugin:
         self._reachable = None
         self.layers = ValetudoLayers(QgsProject.instance())
         self.zone_tool = self.goto_tool = None
-        self.panel = self.camera_panel = None
+        self.panel = None
         self._dock_state = {}  # dock component -> last known value
         self._watch = None
         self._reboot = None
@@ -110,16 +109,10 @@ class ValetudoPlugin:
         # Panels: hidden by default; their toggle actions follow their visibility.
         self.panel = ValetudoPanel(win)
         self.panel.clientRequested.connect(lambda: self._get_client(prompt=False))
-        self.camera_panel = CameraPanel(win)
         self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.panel)
-        self.iface.addTabifiedDockWidget(Qt.DockWidgetArea.RightDockWidgetArea,
-                                         self.camera_panel, [self.panel.objectName()])
-        for dock in (self.panel, self.camera_panel):
-            dock.hide()
+        self.panel.hide()
         self.act["status_panel"] = self.panel.toggleViewAction()
         self.act["status_panel"].setText(tr("Status panel"))
-        self.act["camera"] = self.camera_panel.toggleViewAction()
-        self.act["camera"].setText(tr("Camera"))
 
         self.toolbar = self.iface.addToolBar("Valetudo")
         self.toolbar.setObjectName("ValetudoToolbar")
@@ -168,13 +161,11 @@ class ValetudoPlugin:
         for key in MENU:
             if key is not None and key in self.act:
                 self.iface.removePluginMenu(self.menu, self.act[key])
-        if self.camera_panel is not None:
-            self.camera_panel.shutdown()
-        for dock in (self.panel, self.camera_panel):
-            if dock is not None:
-                self.iface.removeDockWidget(dock)
-                dock.deleteLater()
-        self.panel = self.camera_panel = None
+        if self.panel is not None:
+            self.panel.shutdown()
+            self.iface.removeDockWidget(self.panel)
+            self.panel.deleteLater()
+            self.panel = None
         if self.toolbar is not None:
             self.iface.mainWindow().removeToolBar(self.toolbar)
             self.toolbar.deleteLater()
@@ -297,8 +288,8 @@ class ValetudoPlugin:
         self._drop_client()  # settings may have changed
         if self.panel is not None and self.panel.isVisible():
             self._get_client(prompt=False)   # reconnect the visible panel at once
-        if self.camera_panel is not None:
-            self.camera_panel.restart_if_running()
+        if self.panel is not None:
+            self.panel.camera.restart_if_running()
         return True
 
     def show_map(self, *_):

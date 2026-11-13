@@ -16,7 +16,12 @@ from qgis.core import QgsApplication, QgsNetworkAccessManager, QgsPointXY
 from .coords import q2v
 
 COMMAND_KEYS = ("start", "pause", "stop", "home", "segments", "zone", "goto",
-                "fan_speed", "water_usage")
+                "fan_speed", "water_usage", "camera_light")
+
+# On/off capabilities handled by fetch_toggle() / set_toggle(), with their command key.
+TOGGLE_CAPABILITIES = {
+    "CameraLightControlCapability": "camera_light",
+}
 
 # Preset capabilities handled by set_preset(), with their command key.
 PRESET_CAPABILITIES = {
@@ -37,6 +42,8 @@ class ValetudoClient(QObject):
     wifiReceived = pyqtSignal(dict)
     eventsReceived = pyqtSignal(list)
     presetsReceived = pyqtSignal(str, list)   # capability name, preset names
+    toggleReceived = pyqtSignal(str, bool)     # capability name, enabled
+    mapPeeked = pyqtSignal(dict)               # map read for the panel only (no layers)
     commandDone = pyqtSignal(str)
     reachable = pyqtSignal(bool)              # emitted after every request
     error = pyqtSignal(str)
@@ -48,6 +55,7 @@ class ValetudoClient(QObject):
         self.nam = QgsNetworkAccessManager.instance()
         self._replies = set()   # keeps replies alive until they finish
         self._map_pending = False
+        self._peek_pending = False
         self._timer = QTimer(self)
         self._timer.timeout.connect(lambda: self.fetch_map(quiet=True))
 
@@ -145,6 +153,19 @@ class ValetudoClient(QObject):
                   lambda d: self.presetsReceived.emit(capability, self._as_list(d)),
                   quiet=quiet)
 
+    def fetch_toggle(self, capability, quiet=True):
+        self._get(f"/robot/capabilities/{capability}",
+                  lambda d: self.toggleReceived.emit(capability, bool((d or {}).get("enabled"))),
+                  quiet=quiet)
+
+    def peek_map(self):
+        """Read the map for the status panel (position) without touching the layers."""
+        if self._peek_pending:
+            return
+        self._peek_pending = True
+        self._get("/robot/state/map", self.mapPeeked.emit,
+                  on_finish=lambda: setattr(self, "_peek_pending", False), quiet=True)
+
     def fetch_map(self, quiet=False):
         if self._map_pending:  # do not pile up requests if the robot is slow
             return
@@ -177,6 +198,11 @@ class ValetudoClient(QObject):
         """Select a preset (e.g. fan speed 'high') on a preset capability."""
         self._command(capability, {"name": name}, PRESET_CAPABILITIES.get(capability, capability),
                       path_suffix="/preset")
+
+    def set_toggle(self, capability, enabled):
+        """Switch an on/off capability (e.g. the camera light)."""
+        self._command(capability, {"action": "enable" if enabled else "disable"},
+                      TOGGLE_CAPABILITIES.get(capability, capability))
 
     def clean_segments(self, segment_ids, iterations=1):
         self._command("MapSegmentationCapability", {

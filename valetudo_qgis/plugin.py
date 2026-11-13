@@ -58,6 +58,7 @@ def command_labels():
         "goto": tr("Go to"),
         "fan_speed": tr("Fan speed"),
         "water_usage": tr("Water usage"),
+        "camera_light": tr("Camera light"),
     }
 
 

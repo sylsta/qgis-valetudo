@@ -416,10 +416,6 @@
         <translation>Position</translation>
     </message>
     <message>
-        <source>Unknown: show the map or turn on live tracking.</source>
-        <translation>Inconnue : affichez la carte ou activez le suivi en direct.</translation>
-    </message>
-    <message>
         <source>Features</source>
         <translation>Fonctionnalités</translation>
     </message>
@@ -650,6 +646,158 @@ Un nettoyage en cours sera interrompu. Le robot sera injoignable pendant une ou 
     <message>
         <source>SSH port (reboot)</source>
         <translation>Port SSH (redémarrage)</translation>
+    </message>
+    <message>
+        <source>Camera light</source>
+        <translation>Éclairage de la caméra</translation>
+    </message>
+    <message>
+        <source>Auto-empty dock</source>
+        <translation>Vidage automatique de la base</translation>
+    </message>
+    <message>
+        <source>Auto-empty duration</source>
+        <translation>Durée du vidage automatique</translation>
+    </message>
+    <message>
+        <source>Auto-empty interval</source>
+        <translation>Fréquence du vidage automatique</translation>
+    </message>
+    <message>
+        <source>Carpet mode</source>
+        <translation>Mode tapis</translation>
+    </message>
+    <message>
+        <source>Carpet sensor mode</source>
+        <translation>Détection des tapis</translation>
+    </message>
+    <message>
+        <source>Cleaning route</source>
+        <translation>Trajet de nettoyage</translation>
+    </message>
+    <message>
+        <source>Collision-avoidant navigation</source>
+        <translation>Navigation anti-collision</translation>
+    </message>
+    <message>
+        <source>Virtual walls and no-go zones</source>
+        <translation>Murs virtuels et zones interdites</translation>
+    </message>
+    <message>
+        <source>Do not disturb</source>
+        <translation>Ne pas déranger</translation>
+    </message>
+    <message>
+        <source>Floor-direction-aware navigation</source>
+        <translation>Navigation selon le sens du sol</translation>
+    </message>
+    <message>
+        <source>Manual control (high resolution)</source>
+        <translation>Contrôle manuel (haute résolution)</translation>
+    </message>
+    <message>
+        <source>Child lock</source>
+        <translation>Verrouillage enfant</translation>
+    </message>
+    <message>
+        <source>Map reset</source>
+        <translation>Réinitialisation de la carte</translation>
+    </message>
+    <message>
+        <source>Room editing</source>
+        <translation>Édition des pièces</translation>
+    </message>
+    <message>
+        <source>Floor materials</source>
+        <translation>Revêtements de sol</translation>
+    </message>
+    <message>
+        <source>Room renaming</source>
+        <translation>Renommage des pièces</translation>
+    </message>
+    <message>
+        <source>Map snapshots</source>
+        <translation>Sauvegardes de carte</translation>
+    </message>
+    <message>
+        <source>Mapping pass</source>
+        <translation>Passage de cartographie</translation>
+    </message>
+    <message>
+        <source>Mop washing</source>
+        <translation>Lavage des serpillières</translation>
+    </message>
+    <message>
+        <source>Mop drying</source>
+        <translation>Séchage des serpillières</translation>
+    </message>
+    <message>
+        <source>Automatic mop drying</source>
+        <translation>Séchage automatique des serpillières</translation>
+    </message>
+    <message>
+        <source>Mop drying time</source>
+        <translation>Durée de séchage des serpillières</translation>
+    </message>
+    <message>
+        <source>Mop wash temperature</source>
+        <translation>Température de lavage des serpillières</translation>
+    </message>
+    <message>
+        <source>Mop extension</source>
+        <translation>Extension de la serpillière</translation>
+    </message>
+    <message>
+        <source>Mop extension around furniture legs</source>
+        <translation>Extension autour des pieds de meubles</translation>
+    </message>
+    <message>
+        <source>Mop twist</source>
+        <translation>Rotation de la serpillière</translation>
+    </message>
+    <message>
+        <source>Obstacle avoidance</source>
+        <translation>Évitement d'obstacles</translation>
+    </message>
+    <message>
+        <source>Obstacle images</source>
+        <translation>Images d'obstacles</translation>
+    </message>
+    <message>
+        <source>Operation mode</source>
+        <translation>Mode de fonctionnement</translation>
+    </message>
+    <message>
+        <source>Pending map changes</source>
+        <translation>Changements de carte en attente</translation>
+    </message>
+    <message>
+        <source>Pet waste avoidance</source>
+        <translation>Évitement des déjections animales</translation>
+    </message>
+    <message>
+        <source>Quirks</source>
+        <translation>Réglages spécifiques</translation>
+    </message>
+    <message>
+        <source>Speaker test</source>
+        <translation>Test du haut-parleur</translation>
+    </message>
+    <message>
+        <source>Speaker volume</source>
+        <translation>Volume du haut-parleur</translation>
+    </message>
+    <message>
+        <source>Voice packs</source>
+        <translation>Packs vocaux</translation>
+    </message>
+    <message>
+        <source>Wi-Fi scan</source>
+        <translation>Recherche Wi-Fi</translation>
+    </message>
+    <message>
+        <source>Waiting for the robot position…</source>
+        <translation>En attente de la position du robot…</translation>
     </message>
 </context>
 </TS>

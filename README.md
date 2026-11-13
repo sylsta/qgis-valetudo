@@ -41,13 +41,16 @@ without restarting QGIS.
    attachments, position, Wi-Fi, supported features and recent events. It has its
    own Start / Pause / Stop / Return to dock buttons and refreshes itself while it
    is visible (every 5 s while the robot works, every 30 s otherwise), even when
-   the robot is docked.
+   the robot is docked. Every section folds by unticking its title (remembered);
+   Wi-Fi, Features and Recent events start folded. The robot position is read
+   by the panel itself, no need to show the map.
 
 8. **Camera**: a "Camera" section at the top of the status panel shows the
    robot's live video, for robots that expose a raw H.264 stream over TCP
    (default `tcp://<robot>:8555`). It needs **ffmpeg** (found in the `PATH`, or
    set its path in the settings). Video plays while the panel is visible and the
-   section is ticked; untick it to stop the video. The stream reconnects by itself
+   section is ticked; untick it to stop the video. Robots with a camera light
+   get a "Camera light" switch under the video. The stream reconnects by itself
    if it drops, and **Save snapshot** saves the current image as PNG.
 
 **Dock station notifications**: once a robot is configured, the plugin checks

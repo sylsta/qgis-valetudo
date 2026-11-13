@@ -6,10 +6,12 @@ the robot does not support stay hidden.
 """
 
 import math
+import re
 import time
 
 from qgis.PyQt.QtCore import QDateTime, Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QFormLayout,
     QGroupBox,
@@ -119,8 +121,65 @@ def dock_component_advice():
             "full": tr("Empty it.")}
 
 
+# Capabilities listed with ✗ when missing (the ones the plugin uses).
+CORE_CAPABILITIES = [
+    "BasicControlCapability", "MapSegmentationCapability", "ZoneCleaningCapability",
+    "GoToLocationCapability", "FanSpeedControlCapability", "WaterUsageControlCapability",
+    "ConsumableMonitoringCapability", "CurrentStatisticsCapability",
+    "TotalStatisticsCapability", "LocateCapability", "AutoEmptyDockManualTriggerCapability",
+    "WifiConfigurationCapability", "CameraLightControlCapability",
+]
+
+
+def _humanize(capability):
+    """'CarpetSensorModeControlCapability' -> 'Carpet sensor mode control' (fallback)."""
+    name = capability[:-len("Capability")] if capability.endswith("Capability") else capability
+    words = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", name).split()
+    return " ".join([words[0]] + [w.lower() for w in words[1:]]) if words else capability
+
+
 def _capability_labels():
     return {
+        "AutoEmptyDockAutoEmptyControlCapability": tr("Auto-empty dock"),
+        "AutoEmptyDockAutoEmptyDurationControlCapability": tr("Auto-empty duration"),
+        "AutoEmptyDockAutoEmptyIntervalControlCapability": tr("Auto-empty interval"),
+        "CameraLightControlCapability": tr("Camera light"),
+        "CarpetModeControlCapability": tr("Carpet mode"),
+        "CarpetSensorModeControlCapability": tr("Carpet sensor mode"),
+        "CleanRouteControlCapability": tr("Cleaning route"),
+        "CollisionAvoidantNavigationControlCapability": tr("Collision-avoidant navigation"),
+        "CombinedVirtualRestrictionsCapability": tr("Virtual walls and no-go zones"),
+        "DoNotDisturbCapability": tr("Do not disturb"),
+        "FloorMaterialDirectionAwareNavigationControlCapability":
+            tr("Floor-direction-aware navigation"),
+        "HighResolutionManualControlCapability": tr("Manual control (high resolution)"),
+        "KeyLockCapability": tr("Child lock"),
+        "ManualControlCapability": tr("Manual control"),
+        "MapResetCapability": tr("Map reset"),
+        "MapSegmentEditCapability": tr("Room editing"),
+        "MapSegmentMaterialControlCapability": tr("Floor materials"),
+        "MapSegmentRenameCapability": tr("Room renaming"),
+        "MapSnapshotCapability": tr("Map snapshots"),
+        "MappingPassCapability": tr("Mapping pass"),
+        "MopDockCleanManualTriggerCapability": tr("Mop washing"),
+        "MopDockDryManualTriggerCapability": tr("Mop drying"),
+        "MopDockMopAutoDryingControlCapability": tr("Automatic mop drying"),
+        "MopDockMopDryingTimeControlCapability": tr("Mop drying time"),
+        "MopDockMopWashTemperatureControlCapability": tr("Mop wash temperature"),
+        "MopExtensionControlCapability": tr("Mop extension"),
+        "MopExtensionFurnitureLegHandlingControlCapability":
+            tr("Mop extension around furniture legs"),
+        "MopTwistControlCapability": tr("Mop twist"),
+        "ObstacleAvoidanceControlCapability": tr("Obstacle avoidance"),
+        "ObstacleImagesCapability": tr("Obstacle images"),
+        "OperationModeControlCapability": tr("Operation mode"),
+        "PendingMapChangeHandlingCapability": tr("Pending map changes"),
+        "PetObstacleAvoidanceControlCapability": tr("Pet waste avoidance"),
+        "QuirksCapability": tr("Quirks"),
+        "SpeakerTestCapability": tr("Speaker test"),
+        "SpeakerVolumeControlCapability": tr("Speaker volume"),
+        "VoicePackManagementCapability": tr("Voice packs"),
+        "WifiScanCapability": tr("Wi-Fi scan"),
         "BasicControlCapability": tr("Basic control"),
         "MapSegmentationCapability": tr("Room cleaning"),
         "ZoneCleaningCapability": tr("Zone cleaning"),
@@ -201,6 +260,7 @@ class ValetudoPanel(QgsDockWidget):
         self._last_ok_clock = ""
         self._reachable = None
         self._robot_text = self._version_text = ""
+        self._last_map = 0.0   # time.monotonic() of the last map received
 
         self._timer = QTimer(self)
         self._timer.setInterval(IDLE_INTERVAL_MS)
@@ -215,10 +275,26 @@ class ValetudoPanel(QgsDockWidget):
 
     # -- UI construction -------------------------------------------------------
 
-    def _section(self, title):
+    def _section(self, title, key, open_default=True):
+        """A section that folds when its box is unticked; the choice is remembered."""
         box = QGroupBox(title)
-        form = QFormLayout(box)
+        box.setCheckable(True)
+        settings_key = f"valetudo/section_{key}"
+        is_open = QgsSettings().value(settings_key, open_default, type=bool)
+        box.setChecked(is_open)
+        content = QWidget()
+        outer = QVBoxLayout(box)
+        outer.addWidget(content)
+        form = QFormLayout(content)
+        form.setContentsMargins(0, 0, 0, 0)
         form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        content.setVisible(is_open)
+
+        def toggled(checked):
+            QgsSettings().setValue(settings_key, checked)
+            content.setVisible(checked)
+
+        box.toggled.connect(toggled)
         self._layout.addWidget(box)
         return box, form
 
@@ -262,12 +338,16 @@ class ValetudoPanel(QgsDockWidget):
         camera_layout = QVBoxLayout(self.box_camera)
         self.camera = CameraWidget()
         camera_layout.addWidget(self.camera)
+        self.camera_light = QCheckBox(tr("Camera light"))
+        self.camera_light.setVisible(False)    # shown if the robot supports it
+        self.camera_light.clicked.connect(self._on_camera_light_clicked)  # user only
+        camera_layout.addWidget(self.camera_light)
         self.camera.setVisible(self.box_camera.isChecked())
         self.box_camera.toggled.connect(self._on_camera_toggled)
         self._layout.addWidget(self.box_camera)
 
         # Status
-        self.box_status, form = self._section(tr("Status"))
+        self.box_status, form = self._section(tr("Status"), "status")
         self.lbl_state = self._value_label()
         form.addRow(tr("State"), self.lbl_state)
         self.bar_battery = QProgressBar()
@@ -281,10 +361,10 @@ class ValetudoPanel(QgsDockWidget):
         self._status_form = form
 
         # Dock station: fresh/waste water tanks, detergent, dust bag (rows rebuilt on update)
-        self.box_dock, self._dock_form = self._section(tr("Dock station"))
+        self.box_dock, self._dock_form = self._section(tr("Dock station"), "dock")
 
         # Settings (presets)
-        self.box_settings, form = self._section(tr("Settings"))
+        self.box_settings, form = self._section(tr("Settings"), "settings")
         self.preset_combos = {}
         for capability, text in (("FanSpeedControlCapability", tr("Fan speed")),
                                  ("WaterUsageControlCapability", tr("Water usage"))):
@@ -295,13 +375,13 @@ class ValetudoPanel(QgsDockWidget):
         self._settings_form = form
 
         # Statistics
-        self.box_current, form = self._section(tr("Current or last cleaning"))
+        self.box_current, form = self._section(tr("Current or last cleaning"), "current")
         self.lbl_cur_time = self._value_label()
         self.lbl_cur_area = self._value_label()
         form.addRow(tr("Duration"), self.lbl_cur_time)
         form.addRow(tr("Area"), self.lbl_cur_area)
 
-        self.box_total, form = self._section(tr("Totals"))
+        self.box_total, form = self._section(tr("Totals"), "totals")
         self.lbl_tot_count = self._value_label()
         self.lbl_tot_time = self._value_label()
         self.lbl_tot_area = self._value_label()
@@ -310,34 +390,31 @@ class ValetudoPanel(QgsDockWidget):
         form.addRow(tr("Area"), self.lbl_tot_area)
 
         # Consumables (rows rebuilt on each update)
-        self.box_consumables, self._consumables_form = self._section(tr("Consumables"))
+        self.box_consumables, self._consumables_form = self._section(tr("Consumables"), "consumables")
 
         # Attachments, position, Wi-Fi, features
-        self.box_attachments, form = self._section(tr("Attachments"))
+        self.box_attachments, form = self._section(tr("Attachments"), "attachments")
         self.lbl_attachments = self._value_label()
         form.addRow(self.lbl_attachments)
 
-        self.box_position, form = self._section(tr("Position"))
+        self.box_position, form = self._section(tr("Position"), "position")
         self.lbl_position = self._value_label()
-        self.lbl_position.setText(tr("Unknown: show the map or turn on live tracking."))
+        self.lbl_position.setText(tr("Waiting for the robot position…"))
         form.addRow(self.lbl_position)
 
-        self.box_wifi, form = self._section(tr("Wi-Fi"))
+        self.box_wifi, form = self._section(tr("Wi-Fi"), "wifi", open_default=False)
         self.lbl_wifi = self._value_label()
         form.addRow(self.lbl_wifi)
 
-        self.box_features, form = self._section(tr("Features"))
+        self.box_features, form = self._section(tr("Features"), "features", open_default=False)
         self.lbl_features = self._value_label()
         form.addRow(self.lbl_features)
 
         # Events
-        box = QGroupBox(tr("Recent events"))
-        events_layout = QVBoxLayout(box)
+        self.box_events, form = self._section(tr("Recent events"), "events", open_default=False)
         self.list_events = QListWidget()
         self.list_events.setMaximumHeight(160)
-        events_layout.addWidget(self.list_events)
-        self._layout.addWidget(box)
-        self.box_events = box
+        form.addRow(self.list_events)
 
         self._layout.addStretch(1)
         scroll = QScrollArea()
@@ -389,6 +466,7 @@ class ValetudoPanel(QgsDockWidget):
                         self.box_dock):
                 box.setVisible(False)
             self.lbl_features.setText("—")
+            self.camera_light.setVisible(False)
             return
         client.reachable.connect(self._on_reachable)
         client.robotInfoReceived.connect(self._on_robot_info)
@@ -401,6 +479,8 @@ class ValetudoPanel(QgsDockWidget):
         client.wifiReceived.connect(self._on_wifi)
         client.eventsReceived.connect(self._on_events)
         client.presetsReceived.connect(self._on_presets)
+        client.toggleReceived.connect(self._on_toggle)
+        client.mapPeeked.connect(self.update_map)
         client.commandDone.connect(lambda *_: QTimer.singleShot(1500, self.refresh))
         self._robot_text = ""
         self._version_text = ""
@@ -409,6 +489,14 @@ class ValetudoPanel(QgsDockWidget):
         if self.isVisible():
             self.refresh()
             self._timer.start()
+
+    def _on_camera_light_clicked(self, checked):
+        if self.client is not None:
+            self.client.set_toggle("CameraLightControlCapability", checked)
+
+    def _on_toggle(self, capability, enabled):
+        if capability == "CameraLightControlCapability":
+            self.camera_light.setChecked(enabled)   # setChecked does not emit clicked
 
     def _on_camera_toggled(self, checked):
         QgsSettings().setValue(KEY_CAMERA_OPEN, checked)
@@ -446,6 +534,9 @@ class ValetudoPanel(QgsDockWidget):
             return
         client.fetch_attributes(quiet=True)
         client.fetch_events(quiet=True)
+        # Position comes from the map: read it unless live tracking just delivered one.
+        if time.monotonic() - self._last_map >= self._timer.interval() / 1000 * 0.9:
+            client.peek_map()
         caps = self.capabilities or set()
         if "ConsumableMonitoringCapability" in caps:
             client.fetch_consumables(quiet=True)
@@ -523,8 +614,13 @@ class ValetudoPanel(QgsDockWidget):
         self.box_wifi.setVisible("WifiConfigurationCapability" in caps)
 
         labels = _capability_labels()
-        lines = [f"✓ {labels.get(c, c.replace('Capability', ''))}" for c in sorted(caps)]
-        lines += [f"✗ {text}" for c, text in labels.items() if c not in caps]
+        name = lambda c: labels.get(c) or _humanize(c)
+        lines = [f"✓ {n}" for n in sorted(name(c) for c in caps)]
+        lines += [f"✗ {name(c)}" for c in CORE_CAPABILITIES if c not in caps]
+        if self.camera_light.isVisibleTo(self) != ("CameraLightControlCapability" in caps):
+            self.camera_light.setVisible("CameraLightControlCapability" in caps)
+        if "CameraLightControlCapability" in caps:
+            self.client.fetch_toggle("CameraLightControlCapability")
         self.lbl_features.setText("\n".join(lines))
         if self.isVisible():   # nothing is fetched while the panel is hidden
             self.refresh()
@@ -681,7 +777,8 @@ class ValetudoPanel(QgsDockWidget):
             self.list_events.addItem(f"{stamp}  {_event_label(event)}".strip())
 
     def update_map(self, map_json):
-        """Called by the plugin with each map it receives (show map / live tracking)."""
+        """Called with each map: from the plugin (show map / live tracking) or peeked."""
+        self._last_map = time.monotonic()
         robot = dock = None
         for ent in map_json.get("entities", []):
             pts = ent.get("points") or []

@@ -90,6 +90,32 @@ def _consumable_label(ctype, subtype):
     return labels.get((ctype, subtype)) or " ".join(p for p in (ctype, subtype) if p)
 
 
+# Dock components (DockComponentStateAttribute), in display order.
+DOCK_COMPONENT_ORDER = ["water_tank_clean", "water_tank_dirty", "detergent", "dustbag"]
+DOCK_COMPONENT_PROBLEMS = {"missing", "empty", "full"}
+
+
+def _dock_component_labels():
+    return {
+        "water_tank_clean": tr("Fresh water"),
+        "water_tank_dirty": tr("Waste water"),
+        "detergent": tr("Detergent"),
+        "dustbag": tr("Dust bag"),
+    }
+
+
+def _dock_component_values():
+    return {
+        "ok": tr("OK"), "missing": tr("Missing"), "empty": tr("Empty"),
+        "full": tr("Full"), "unknown": tr("Unknown"),
+    }
+
+
+def _dock_component_advice():
+    return {"missing": tr("Put it back in place."), "empty": tr("Refill it."),
+            "full": tr("Empty it.")}
+
+
 def _capability_labels():
     return {
         "BasicControlCapability": tr("Basic control"),
@@ -239,6 +265,9 @@ class ValetudoPanel(QgsDockWidget):
         form.addRow(tr("Error"), self.lbl_error)
         self._status_form = form
 
+        # Dock station: fresh/waste water tanks, detergent, dust bag (rows rebuilt on update)
+        self.box_dock, self._dock_form = self._section(tr("Dock station"))
+
         # Settings (presets)
         self.box_settings, form = self._section(tr("Settings"))
         self.preset_combos = {}
@@ -302,7 +331,7 @@ class ValetudoPanel(QgsDockWidget):
         self.setWidget(scroll)
 
         for box in (self.box_settings, self.box_current, self.box_total, self.box_consumables,
-                    self.box_attachments, self.box_wifi):
+                    self.box_attachments, self.box_wifi, self.box_dock):
             box.setVisible(False)   # shown once the robot reports them
 
     def set_actions(self, *rows):
@@ -326,7 +355,8 @@ class ValetudoPanel(QgsDockWidget):
             self._timer.stop()
             self._show_disconnected()
             for box in (self.box_settings, self.box_current, self.box_total,
-                        self.box_consumables, self.box_attachments, self.box_wifi):
+                        self.box_consumables, self.box_attachments, self.box_wifi,
+                        self.box_dock):
                 box.setVisible(False)
             self.lbl_features.setText("—")
             return
@@ -465,6 +495,7 @@ class ValetudoPanel(QgsDockWidget):
         states, flags = _state_labels(), _flag_labels()
         attachments = []
         dock_value = None
+        components = {}
         error_text = ""
         state = None
         for attr in attributes:
@@ -499,16 +530,44 @@ class ValetudoPanel(QgsDockWidget):
                 attachments.append(f"{name} {'✓' if attr.get('attached') else '✗'}")
             elif cls == "DockStatusStateAttribute":
                 dock_value = attr.get("value")
+            elif cls == "DockComponentStateAttribute":
+                components[attr.get("type")] = attr.get("value")
 
         _set_row_visible(self._status_form, self.lbl_dock, dock_value is not None)
         self.lbl_dock.setText(_label(states, dock_value))
         _set_row_visible(self._status_form, self.lbl_error, bool(error_text))
         self.lbl_error.setText(error_text)
         self.box_attachments.setVisible(bool(attachments))
+        self._update_dock_components(components)
         self.lbl_attachments.setText("   ".join(attachments))
 
         self._timer.setInterval(ACTIVE_INTERVAL_MS if state in ACTIVE_STATES
                                 else IDLE_INTERVAL_MS)
+
+    def _update_dock_components(self, components):
+        """One row per dock component; problems (missing/empty/full) in red with advice."""
+        form = self._dock_form
+        while form.rowCount():
+            form.removeRow(0)
+        self.box_dock.setVisible(bool(components))
+        names, values, advice = (_dock_component_labels(), _dock_component_values(),
+                                 _dock_component_advice())
+        order = DOCK_COMPONENT_ORDER + sorted(c for c in components
+                                              if c not in DOCK_COMPONENT_ORDER)
+        for component in order:
+            if component not in components:
+                continue
+            value = components[component]
+            label = QLabel(_label(values, value))
+            name = _label(names, component)
+            if value in DOCK_COMPONENT_PROBLEMS:
+                name = f"{name} ⚠"
+                label.setStyleSheet("color: #c62828; font-weight: bold;")
+                label.setToolTip(advice[value])
+                label.setText(f"{label.text()} · {advice[value]}")
+            elif value == "ok":
+                label.setStyleSheet("color: #2e7d32;")
+            form.addRow(name, label)
 
     def _on_consumables(self, consumables):
         form = self._consumables_form

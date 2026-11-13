@@ -559,5 +559,49 @@
         <source>Robot unreachable.</source>
         <translation>Robot injoignable.</translation>
     </message>
+    <message>
+        <source>Fresh water</source>
+        <translation>Eau propre</translation>
+    </message>
+    <message>
+        <source>Waste water</source>
+        <translation>Eau sale</translation>
+    </message>
+    <message>
+        <source>OK</source>
+        <translation>OK</translation>
+    </message>
+    <message>
+        <source>Missing</source>
+        <translation>Absent</translation>
+    </message>
+    <message>
+        <source>Empty</source>
+        <translation>Vide</translation>
+    </message>
+    <message>
+        <source>Full</source>
+        <translation>Plein</translation>
+    </message>
+    <message>
+        <source>Unknown</source>
+        <translation>Inconnu</translation>
+    </message>
+    <message>
+        <source>Put it back in place.</source>
+        <translation>Remettez-le en place.</translation>
+    </message>
+    <message>
+        <source>Refill it.</source>
+        <translation>Remplissez-le.</translation>
+    </message>
+    <message>
+        <source>Empty it.</source>
+        <translation>Videz-le.</translation>
+    </message>
+    <message>
+        <source>Dock station</source>
+        <translation>Station d'accueil</translation>
+    </message>
 </context>
 </TS>

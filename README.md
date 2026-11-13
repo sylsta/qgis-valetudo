@@ -36,7 +36,8 @@ without restarting QGIS.
 6. **Go here**: click on the map; the robot drives to that spot.
 
 7. **Status panel**: a dockable panel with the robot state, battery, errors, fan
-   speed and water usage (editable), current and total statistics, consumables,
+   speed and water usage (editable), dock station state (fresh and waste water
+   tanks, detergent, dust bag), current and total statistics, consumables,
    attachments, position, Wi-Fi, supported features and recent events. It has its
    own Start / Pause / Stop / Return to dock buttons and refreshes itself while it
    is visible (every 5 s while the robot works, every 30 s otherwise), even when

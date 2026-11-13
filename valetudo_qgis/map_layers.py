@@ -6,13 +6,16 @@ are recomputed only when the map itself has changed.
 """
 
 from qgis.PyQt.QtCore import QMetaType
-from qgis.PyQt.QtGui import QColor
 from qgis.core import (
+    QgsCategorizedSymbolRenderer,
     QgsCoordinateReferenceSystem,
     QgsFeature,
     QgsField,
     QgsGeometry,
+    QgsMarkerSymbol,
+    QgsProperty,
     QgsRectangle,
+    QgsRendererCategory,
     QgsVectorLayer,
 )
 
@@ -22,6 +25,10 @@ from .i18n import tr
 GROUP_NAME = "Valetudo"
 AREA_ENTITIES = {"no_go_area", "no_mop_area", "active_zone"}
 POINT_ENTITIES = {"robot_position", "charger_location", "go_to_target", "obstacle"}
+
+# Valetudo's robot angle is in degrees, clockwise on screen (our Y flip keeps the
+# on-screen orientation). If the arrow points the wrong way, adjust this offset.
+ROBOT_ANGLE_OFFSET = 0
 
 STR = QMetaType.Type.QString
 DBL = QMetaType.Type.Double
@@ -35,6 +42,28 @@ def layer_names():
         "lines": tr("Valetudo - lines"),
         "robot": tr("Valetudo - robot"),
     }
+
+
+def _points_renderer():
+    """One symbol per point type, so the robot is not confused with its dock."""
+    def marker(**props):
+        return QgsMarkerSymbol.createSimple({k: str(v) for k, v in props.items()})
+
+    robot = marker(name="arrow", color="#e31a1c", outline_color="black", size=6)
+    robot.setDataDefinedAngle(QgsProperty.fromExpression(
+        f'coalesce("angle", 0) + {ROBOT_ANGLE_OFFSET}'))
+
+    categories = [
+        QgsRendererCategory("robot_position", robot, tr("Robot")),
+        QgsRendererCategory("charger_location", marker(
+            name="square", color="#33a02c", outline_color="black", size=4), tr("Dock")),
+        QgsRendererCategory("go_to_target", marker(
+            name="cross", color="#1f78b4", outline_color="#1f78b4",
+            outline_width=0.8, size=5), tr("Go-to target")),
+        QgsRendererCategory("obstacle", marker(
+            name="triangle", color="#ff7f00", outline_color="black", size=3), tr("Obstacle")),
+    ]
+    return QgsCategorizedSymbolRenderer("type", categories)
 
 
 # ---------------------------------------------------------------------------
@@ -134,9 +163,7 @@ class ValetudoLayers:
             lyr.setCrs(QgsCoordinateReferenceSystem())     # undo any default CRS
             group.addLayer(lyr)
 
-        sym = layers["robot"].renderer().symbol()
-        sym.setSize(4)
-        sym.setColor(QColor("red"))
+        layers["robot"].setRenderer(_points_renderer())
         layers["rooms"].renderer().symbol().setOpacity(0.6)
 
         self._ids = {role: lyr.id() for role, lyr in layers.items()}
@@ -200,6 +227,8 @@ class ValetudoLayers:
                 area_f.append(_feature(areas, QgsGeometry.fromPolygonXY([pts + [pts[0]]]), [etype]))
             else:  # path, predicted_path, virtual_wall...
                 line_f.append(_feature(lines, QgsGeometry.fromPolylineXY(pts), [etype]))
+        # Features are drawn in insertion order: put the robot last, on top of its dock.
+        point_f.sort(key=lambda f: f["type"] == "robot_position")
         _replace_features(areas, area_f)
         _replace_features(lines, line_f)
         _replace_features(robot, point_f)

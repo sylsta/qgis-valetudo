@@ -95,5 +95,21 @@
         <source>Live tracking refresh</source>
         <translation>Rafraîchissement du suivi</translation>
     </message>
+    <message>
+        <source>Robot</source>
+        <translation>Robot</translation>
+    </message>
+    <message>
+        <source>Dock</source>
+        <translation>Base</translation>
+    </message>
+    <message>
+        <source>Go-to target</source>
+        <translation>Destination</translation>
+    </message>
+    <message>
+        <source>Obstacle</source>
+        <translation>Obstacle</translation>
+    </message>
 </context>
 </TS>

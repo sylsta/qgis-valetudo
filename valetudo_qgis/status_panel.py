@@ -95,7 +95,7 @@ DOCK_COMPONENT_ORDER = ["water_tank_clean", "water_tank_dirty", "detergent", "du
 DOCK_COMPONENT_PROBLEMS = {"missing", "empty", "full"}
 
 
-def _dock_component_labels():
+def dock_component_labels():
     return {
         "water_tank_clean": tr("Fresh water"),
         "water_tank_dirty": tr("Waste water"),
@@ -104,14 +104,14 @@ def _dock_component_labels():
     }
 
 
-def _dock_component_values():
+def dock_component_values():
     return {
         "ok": tr("OK"), "missing": tr("Missing"), "empty": tr("Empty"),
         "full": tr("Full"), "unknown": tr("Unknown"),
     }
 
 
-def _dock_component_advice():
+def dock_component_advice():
     return {"missing": tr("Put it back in place."), "empty": tr("Refill it."),
             "full": tr("Empty it.")}
 
@@ -197,6 +197,7 @@ class ValetudoPanel(QgsDockWidget):
         self._last_ok = None        # time.monotonic() of the last successful request
         self._last_ok_clock = ""
         self._reachable = None
+        self._robot_text = self._version_text = ""
 
         self._timer = QTimer(self)
         self._timer.setInterval(IDLE_INTERVAL_MS)
@@ -422,6 +423,9 @@ class ValetudoPanel(QgsDockWidget):
 
     def _on_reachable(self, ok):
         self._reachable = ok
+        if ok and self.client is not None and not self._robot_text:
+            self.client.fetch_robot_info(quiet=True)   # robot was off when we connected
+            self.client.fetch_version(quiet=True)
         if ok:
             self._last_ok = time.monotonic()
             self._last_ok_clock = QDateTime.currentDateTime().toString("HH:mm:ss")
@@ -550,8 +554,8 @@ class ValetudoPanel(QgsDockWidget):
         while form.rowCount():
             form.removeRow(0)
         self.box_dock.setVisible(bool(components))
-        names, values, advice = (_dock_component_labels(), _dock_component_values(),
-                                 _dock_component_advice())
+        names, values, advice = (dock_component_labels(), dock_component_values(),
+                                 dock_component_advice())
         order = DOCK_COMPONENT_ORDER + sorted(c for c in components
                                               if c not in DOCK_COMPONENT_ORDER)
         for component in order:

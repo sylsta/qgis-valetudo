@@ -5,7 +5,7 @@ Valetudo menu and the status panel all show these same objects, so their
 enabled/checked state can never disagree.
 """
 
-from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtCore import Qt, QTimer
 from qgis.PyQt.QtWidgets import QAction
 from qgis.core import Qgis, QgsCoordinateReferenceSystem, QgsProject
 
@@ -15,9 +15,16 @@ from .i18n import install_translator, remove_translator, tr
 from .map_layers import ValetudoLayers, layer_names
 from .map_tools import GoToMapTool, ZoneMapTool
 from .settings_dialog import SettingsDialog, load_settings
-from .status_panel import ValetudoPanel
+from .status_panel import (
+    DOCK_COMPONENT_PROBLEMS,
+    ValetudoPanel,
+    dock_component_advice,
+    dock_component_labels,
+    dock_component_values,
+)
 
 MIN_ZONE_SIZE_CM = 20  # smaller rectangles are treated as accidental clicks
+WATCH_INTERVAL_MS = 60_000  # background check of the dock station, panel open or not
 
 # Valetudo capability required by each action (absent: always available).
 REQUIRED_CAPABILITY = {
@@ -66,6 +73,8 @@ class ValetudoPlugin:
         self.layers = ValetudoLayers(QgsProject.instance())
         self.zone_tool = self.goto_tool = None
         self.panel = self.camera_panel = None
+        self._dock_state = {}  # dock component -> last known value
+        self._watch = None
 
     # ------------------------------------------------------------------
     # GUI setup / teardown
@@ -129,7 +138,17 @@ class ValetudoPlugin:
 
         self._apply_capabilities()
 
+        # Background watch: starts silently if a robot is configured (never prompts).
+        self._watch = QTimer()
+        self._watch.setInterval(WATCH_INTERVAL_MS)
+        self._watch.timeout.connect(self._watch_tick)
+        self._watch.start()
+        QTimer.singleShot(0, self._watch_tick)
+
     def unload(self):
+        if self._watch is not None:
+            self._watch.stop()
+            self._watch = None
         self._drop_client()
         canvas = self.iface.mapCanvas()
         for tool in (self.zone_tool, self.goto_tool):
@@ -182,8 +201,9 @@ class ValetudoPlugin:
         self.client.commandDone.connect(self._on_command_done)
         self.client.mapReceived.connect(self._on_map)
         self.client.capabilitiesReceived.connect(self._on_capabilities)
+        self.client.attributesReceived.connect(self._on_attributes)
         self.panel.attach(self.client)
-        self.client.fetch_capabilities()
+        self.client.fetch_capabilities(quiet=True)   # retried once the robot answers
         return self.client
 
     def _drop_client(self):
@@ -194,6 +214,7 @@ class ValetudoPlugin:
             if self.panel is not None:
                 self.panel.attach(None)
         self._reachable = None
+        self._dock_state = {}
         if "live" in self.act:
             self.act["live"].setChecked(False)
         self._on_capabilities(None)  # unknown robot: re-enable everything
@@ -218,10 +239,45 @@ class ValetudoPlugin:
     def _on_reachable(self, ok):
         """Report only changes, so an offline robot does not flood the message bar."""
         previous, self._reachable = self._reachable, ok
+        if ok and self.capabilities is None and self.client is not None:
+            self.client.fetch_capabilities(quiet=True)   # robot was off when we connected
         if ok and previous is False:
             self._message(tr("Robot reachable again."), Qgis.MessageLevel.Success)
-        elif not ok and previous is not False:
+        elif not ok and previous is True:
             self._message(tr("Robot unreachable."), Qgis.MessageLevel.Warning)
+
+    # -- dock station watch -----------------------------------------------------
+
+    def _watch_tick(self):
+        if not load_settings()["notify_dock"]:
+            return
+        client = self._get_client(prompt=False)
+        if client is not None:
+            client.fetch_attributes(quiet=True)
+
+    def _on_attributes(self, attributes):
+        """Notify when a dock component becomes empty/full/missing, or OK again."""
+        if not load_settings()["notify_dock"]:
+            return
+        names, values, advice = (dock_component_labels(), dock_component_values(),
+                                 dock_component_advice())
+        for attr in attributes:
+            if attr.get("__class") != "DockComponentStateAttribute":
+                continue
+            component, value = attr.get("type"), attr.get("value")
+            previous = self._dock_state.get(component)
+            self._dock_state[component] = value
+            if value == previous:
+                continue
+            name = names.get(component, component)
+            if value in DOCK_COMPONENT_PROBLEMS:
+                text = tr("{component}: {state}. {advice}").format(
+                    component=name, state=values.get(value, value), advice=advice[value])
+                self.iface.messageBar().pushMessage(
+                    "Valetudo", text, level=Qgis.MessageLevel.Warning, duration=0)
+            elif value == "ok" and previous in DOCK_COMPONENT_PROBLEMS:
+                self._message(tr("{component}: OK again.").format(component=name),
+                              Qgis.MessageLevel.Success)
 
     # ------------------------------------------------------------------
     # Actions

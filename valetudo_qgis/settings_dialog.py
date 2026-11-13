@@ -5,7 +5,9 @@ authentication manager (QgsAuthConfigSelect), which encrypts them.
 """
 
 from qgis.PyQt.QtCore import QUrl
-from qgis.PyQt.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QLineEdit, QSpinBox
+from qgis.PyQt.QtWidgets import (
+    QCheckBox, QDialog, QDialogButtonBox, QFormLayout, QLineEdit, QSpinBox,
+)
 from qgis.core import QgsSettings
 from qgis.gui import QgsAuthConfigSelect
 
@@ -17,6 +19,7 @@ KEY_INTERVAL = "valetudo/interval_s"
 KEY_CAMERA_URL = "valetudo/camera_url"
 KEY_FFMPEG = "valetudo/ffmpeg"
 KEY_CAMERA_WIDTH = "valetudo/camera_width"
+KEY_NOTIFY_DOCK = "valetudo/notify_dock"
 
 DEFAULT_CAMERA_PORT = 8555
 
@@ -37,6 +40,7 @@ def load_settings():
         "camera_url": s.value(KEY_CAMERA_URL, "", type=str) or default_camera_url(url),
         "ffmpeg": s.value(KEY_FFMPEG, "", type=str),
         "camera_width": s.value(KEY_CAMERA_WIDTH, 640, type=int),
+        "notify_dock": s.value(KEY_NOTIFY_DOCK, True, type=bool),
     }
 
 
@@ -72,6 +76,9 @@ class SettingsDialog(QDialog):
         self.camera_width.setSuffix(" px")
         self.camera_width.setValue(cfg["camera_width"])
 
+        self.notify_dock = QCheckBox(tr("Warn when a dock tank is empty, full or missing"))
+        self.notify_dock.setChecked(cfg["notify_dock"])
+
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self.accept)
@@ -84,6 +91,7 @@ class SettingsDialog(QDialog):
         form.addRow(tr("Camera stream URL"), self.camera_url)
         form.addRow(tr("ffmpeg path"), self.ffmpeg)
         form.addRow(tr("Video width"), self.camera_width)
+        form.addRow(tr("Dock station notifications"), self.notify_dock)
         form.addRow(buttons)
 
     def accept(self):
@@ -94,4 +102,5 @@ class SettingsDialog(QDialog):
         s.setValue(KEY_CAMERA_URL, self.camera_url.text().strip())
         s.setValue(KEY_FFMPEG, self.ffmpeg.text().strip())
         s.setValue(KEY_CAMERA_WIDTH, self.camera_width.value())
+        s.setValue(KEY_NOTIFY_DOCK, self.notify_dock.isChecked())
         super().accept()

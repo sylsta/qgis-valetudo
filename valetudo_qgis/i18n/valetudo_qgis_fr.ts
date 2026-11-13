@@ -603,5 +603,21 @@
         <source>Dock station</source>
         <translation>Station d'accueil</translation>
     </message>
+    <message>
+        <source>{component}: {state}. {advice}</source>
+        <translation>{component} : {state}. {advice}</translation>
+    </message>
+    <message>
+        <source>{component}: OK again.</source>
+        <translation>{component} : de nouveau OK.</translation>
+    </message>
+    <message>
+        <source>Warn when a dock tank is empty, full or missing</source>
+        <translation>Prévenir quand un réservoir de la station est vide, plein ou absent</translation>
+    </message>
+    <message>
+        <source>Dock station notifications</source>
+        <translation>Notifications de la station</translation>
+    </message>
 </context>
 </TS>

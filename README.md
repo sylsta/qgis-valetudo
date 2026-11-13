@@ -49,6 +49,12 @@ without restarting QGIS.
    while the panel is visible and stops when it is hidden; the stream reconnects
    by itself if it drops, and **Save snapshot** saves the current image as PNG.
 
+**Dock station notifications**: once a robot is configured, the plugin checks
+the dock every minute in the background (panel open or not) and shows a
+persistent warning when the fresh water tank or the detergent is empty, the
+waste water tank or the dust bag is full, or a tank is missing; a short message
+confirms when it is OK again. Turn it off in the settings.
+
 Actions the robot does not support are greyed out. Zone and go-to tools need the
 map to be shown first, and switch back to the Pan tool after each use.
 

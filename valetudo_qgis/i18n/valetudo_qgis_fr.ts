@@ -111,5 +111,33 @@
         <source>Obstacle</source>
         <translation>Obstacle</translation>
     </message>
+    <message>
+        <source>Go here</source>
+        <translation>Aller ici</translation>
+    </message>
+    <message>
+        <source>Room</source>
+        <translation>Pièce</translation>
+    </message>
+    <message>
+        <source>Show the map first.</source>
+        <translation>Affichez d'abord la carte.</translation>
+    </message>
+    <message>
+        <source>Drag a rectangle on the map to clean that zone.</source>
+        <translation>Tracez un rectangle sur la carte pour nettoyer cette zone.</translation>
+    </message>
+    <message>
+        <source>Click on the map to send the robot there.</source>
+        <translation>Cliquez sur la carte pour y envoyer le robot.</translation>
+    </message>
+    <message>
+        <source>Zone too small.</source>
+        <translation>Zone trop petite.</translation>
+    </message>
+    <message>
+        <source>Not supported by this robot.</source>
+        <translation>Non pris en charge par ce robot.</translation>
+    </message>
 </context>
 </TS>

@@ -6,17 +6,23 @@ are recomputed only when the map itself has changed.
 """
 
 from qgis.PyQt.QtCore import QMetaType
+from qgis.PyQt.QtGui import QColor
 from qgis.core import (
     QgsCategorizedSymbolRenderer,
     QgsCoordinateReferenceSystem,
+    QgsExpression,
     QgsFeature,
     QgsField,
     QgsGeometry,
     QgsMarkerSymbol,
+    QgsPalLayerSettings,
     QgsProperty,
     QgsRectangle,
     QgsRendererCategory,
+    QgsTextBufferSettings,
+    QgsTextFormat,
     QgsVectorLayer,
+    QgsVectorLayerSimpleLabeling,
 )
 
 from .coords import v2q
@@ -64,6 +70,27 @@ def _points_renderer():
             name="triangle", color="#ff7f00", outline_color="black", size=3), tr("Obstacle")),
     ]
     return QgsCategorizedSymbolRenderer("type", categories)
+
+
+def _room_labeling():
+    """Label each room with its Valetudo name, or "Room <id>" when it has none."""
+    fallback = QgsExpression.quotedString(tr("Room"))
+    settings = QgsPalLayerSettings()
+    settings.isExpression = True
+    settings.fieldName = (
+        "CASE WHEN \"type\" = 'segment' "
+        f"THEN coalesce(\"name\", {fallback} || ' ' || \"segment_id\") END"
+    )
+    buffer = QgsTextBufferSettings()
+    buffer.setEnabled(True)
+    buffer.setSize(1)
+    buffer.setColor(QColor("white"))
+    fmt = QgsTextFormat()
+    fmt.setSize(10)
+    fmt.setColor(QColor("black"))
+    fmt.setBuffer(buffer)
+    settings.setFormat(fmt)
+    return QgsVectorLayerSimpleLabeling(settings)
 
 
 # ---------------------------------------------------------------------------
@@ -164,6 +191,8 @@ class ValetudoLayers:
             group.addLayer(lyr)
 
         layers["robot"].setRenderer(_points_renderer())
+        layers["rooms"].setLabeling(_room_labeling())
+        layers["rooms"].setLabelsEnabled(True)
         layers["rooms"].renderer().symbol().setOpacity(0.6)
 
         self._ids = {role: lyr.id() for role, lyr in layers.items()}

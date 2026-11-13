@@ -1,4 +1,4 @@
-"""Main plugin class: toolbar, menu, wiring between the client and the layers."""
+"""Main plugin class: toolbar, menu, map tools, wiring between client and layers."""
 
 from qgis.PyQt.QtWidgets import QAction
 from qgis.core import Qgis, QgsCoordinateReferenceSystem, QgsProject
@@ -6,7 +6,10 @@ from qgis.core import Qgis, QgsCoordinateReferenceSystem, QgsProject
 from .client import ValetudoClient
 from .i18n import install_translator, remove_translator, tr
 from .map_layers import ValetudoLayers, layer_names
+from .map_tools import GoToMapTool, ZoneMapTool
 from .settings_dialog import SettingsDialog, load_settings
+
+MIN_ZONE_SIZE_CM = 20  # smaller rectangles are treated as accidental clicks
 
 
 def command_labels():
@@ -31,6 +34,9 @@ class ValetudoPlugin:
         self.toolbar = None
         self.client = None
         self.layers = ValetudoLayers(QgsProject.instance())
+        self.zone_tool = None
+        self.goto_tool = None
+        self._capability_actions = {}  # Valetudo capability name -> [QAction]
 
     # ------------------------------------------------------------------
     # GUI setup / teardown
@@ -46,11 +52,25 @@ class ValetudoPlugin:
         self.act_live = self._add(tr("Live tracking"), self.toggle_live, checkable=True)
         self.toolbar.addSeparator()
         for key in ("start", "pause", "stop", "home"):
-            self._add(labels[key], lambda *_, k=key: self.control(k))
+            self._add(labels[key], lambda *_, k=key: self.control(k),
+                      capability="BasicControlCapability")
         self.toolbar.addSeparator()
-        self._add(tr("Clean selected rooms"), self.clean_selected)
+        self._add(tr("Clean selected rooms"), self.clean_selected,
+                  capability="MapSegmentationCapability")
+        self.act_zone = self._add(labels["zone"], self.activate_zone_tool, checkable=True,
+                                  capability="ZoneCleaningCapability")
+        self.act_goto = self._add(tr("Go here"), self.activate_goto_tool, checkable=True,
+                                  capability="GoToLocationCapability")
 
-    def _add(self, text, slot, checkable=False, toolbar=True):
+        canvas = self.iface.mapCanvas()
+        self.zone_tool = ZoneMapTool(canvas)
+        self.zone_tool.setAction(self.act_zone)  # QGIS unchecks it when another tool is picked
+        self.zone_tool.zoneDrawn.connect(self._on_zone)
+        self.goto_tool = GoToMapTool(canvas)
+        self.goto_tool.setAction(self.act_goto)
+        self.goto_tool.pointPicked.connect(self._on_goto)
+
+    def _add(self, text, slot, checkable=False, toolbar=True, capability=None):
         action = QAction(text, self.iface.mainWindow())
         action.setCheckable(checkable)
         action.triggered.connect(slot)
@@ -58,13 +78,23 @@ class ValetudoPlugin:
             self.toolbar.addAction(action)
         self.iface.addPluginToMenu(self.menu, action)
         self.actions.append(action)
+        if capability:
+            self._capability_actions.setdefault(capability, []).append(action)
         return action
 
     def unload(self):
         self._drop_client()
+        canvas = self.iface.mapCanvas()
+        for tool in (self.zone_tool, self.goto_tool):
+            if tool is not None and canvas.mapTool() is tool:
+                canvas.unsetMapTool(tool)
+        if self.zone_tool is not None:
+            self.zone_tool.cleanup()
+        self.zone_tool = self.goto_tool = None
         for action in self.actions:
             self.iface.removePluginMenu(self.menu, action)
         self.actions = []
+        self._capability_actions = {}
         if self.toolbar:
             self.iface.mainWindow().removeToolBar(self.toolbar)
             self.toolbar.deleteLater()
@@ -91,6 +121,8 @@ class ValetudoPlugin:
         self.client.error.connect(self._on_error)
         self.client.commandDone.connect(self._on_command_done)
         self.client.mapReceived.connect(self._on_map)
+        self.client.capabilitiesReceived.connect(self._on_capabilities)
+        self.client.fetch_capabilities()
         return self.client
 
     def _drop_client(self):
@@ -100,6 +132,17 @@ class ValetudoPlugin:
             self.client = None
         if hasattr(self, "act_live"):
             self.act_live.setChecked(False)
+        self._on_capabilities(None)  # unknown robot: re-enable everything
+
+    def _on_capabilities(self, capabilities):
+        """Disable the actions the robot does not support (None = unknown)."""
+        supported = set(capabilities) if capabilities is not None else None
+        for capability, actions in self._capability_actions.items():
+            ok = supported is None or capability in supported
+            for action in actions:
+                action.setEnabled(ok)
+                action.setToolTip(action.text() if ok else
+                                  f"{action.text()} — {tr('Not supported by this robot.')}")
 
     # ------------------------------------------------------------------
     # Actions
@@ -143,6 +186,48 @@ class ValetudoPlugin:
         client = self._get_client()
         if client:
             client.clean_segments(ids)
+
+    # -- map tools --------------------------------------------------------------
+
+    def _activate_tool(self, tool, action, checked, hint):
+        canvas = self.iface.mapCanvas()
+        if not checked:  # clicking the active tool again turns it off
+            if canvas.mapTool() is tool:
+                self.iface.actionPan().trigger()
+            return
+        if not self._get_client():
+            action.setChecked(False)
+            return
+        if not self.layers.exists():
+            # Coordinates are only meaningful in the robot's frame, i.e. once its map is shown.
+            action.setChecked(False)
+            self._message(tr("Show the map first."), Qgis.MessageLevel.Info)
+            return
+        canvas.setMapTool(tool)
+        self._message(hint, Qgis.MessageLevel.Info)
+
+    def activate_zone_tool(self, checked):
+        self._activate_tool(self.zone_tool, self.act_zone, checked,
+                            tr("Drag a rectangle on the map to clean that zone."))
+
+    def activate_goto_tool(self, checked):
+        self._activate_tool(self.goto_tool, self.act_goto, checked,
+                            tr("Click on the map to send the robot there."))
+
+    def _on_zone(self, rect):
+        self.iface.actionPan().trigger()  # one zone per activation: no accidental resend
+        if rect.width() < MIN_ZONE_SIZE_CM or rect.height() < MIN_ZONE_SIZE_CM:
+            self._message(tr("Zone too small."), Qgis.MessageLevel.Warning)
+            return
+        client = self._get_client()
+        if client:
+            client.clean_zone_qgis(rect)
+
+    def _on_goto(self, point):
+        self.iface.actionPan().trigger()
+        client = self._get_client()
+        if client:
+            client.go_to_qgis(point)
 
     # ------------------------------------------------------------------
     # Incoming data

@@ -19,6 +19,7 @@ from qgis.PyQt.QtWidgets import (
     QLabel,
     QListWidget,
     QProgressBar,
+    QPushButton,
     QGridLayout,
     QScrollArea,
     QSizePolicy,

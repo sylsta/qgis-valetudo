@@ -99,6 +99,8 @@ is the Swagger UI embedded in the robot: `http://<robot-ip>/swagger/`.
 - Add each new string to `valetudo_qgis/i18n/valetudo_qgis_fr.ts` (by hand or with
   Qt Linguist).
 - `python3 scripts/check_translations.py` lists missing translations (also run in CI).
+- `python3 scripts/check_names.py` reports undefined names, e.g. a missing import
+  (also run in CI).
 - `scripts/compile_translations.sh` builds the `.qm` files. They are not committed.
 
 To add a language, copy the `.ts` file to `valetudo_qgis_<lang>.ts`, set its

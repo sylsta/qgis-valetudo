@@ -1,5 +1,6 @@
 """Main plugin class: toolbar, menu, map tools, wiring between client and layers."""
 
+from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import QAction
 from qgis.core import Qgis, QgsCoordinateReferenceSystem, QgsProject
 
@@ -8,6 +9,7 @@ from .i18n import install_translator, remove_translator, tr
 from .map_layers import ValetudoLayers, layer_names
 from .map_tools import GoToMapTool, ZoneMapTool
 from .settings_dialog import SettingsDialog, load_settings
+from .status_panel import ValetudoPanel
 
 MIN_ZONE_SIZE_CM = 20  # smaller rectangles are treated as accidental clicks
 
@@ -22,6 +24,8 @@ def command_labels():
         "segments": tr("Clean rooms"),
         "zone": tr("Clean zone"),
         "goto": tr("Go to"),
+        "fan_speed": tr("Fan speed"),
+        "water_usage": tr("Water usage"),
     }
 
 
@@ -37,6 +41,8 @@ class ValetudoPlugin:
         self.zone_tool = None
         self.goto_tool = None
         self._capability_actions = {}  # Valetudo capability name -> [QAction]
+        self.panel = None
+        self.act_panel = None
 
     # ------------------------------------------------------------------
     # GUI setup / teardown
@@ -49,6 +55,16 @@ class ValetudoPlugin:
 
         self._add(tr("Settings…"), self.configure, toolbar=False)
         self._add(tr("Show map"), self.show_map)
+
+        # Status panel, hidden by default; its toggle action stays in sync with it.
+        self.panel = ValetudoPanel(self.iface.mainWindow())
+        self.panel.clientRequested.connect(self._get_client)
+        self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.panel)
+        self.panel.hide()
+        self.act_panel = self.panel.toggleViewAction()
+        self.act_panel.setText(tr("Status panel"))
+        self.toolbar.addAction(self.act_panel)
+        self.iface.addPluginToMenu(self.menu, self.act_panel)
         self.act_live = self._add(tr("Live tracking"), self.toggle_live, checkable=True)
         self.toolbar.addSeparator()
         for key in ("start", "pause", "stop", "home"):
@@ -94,6 +110,11 @@ class ValetudoPlugin:
         for action in self.actions:
             self.iface.removePluginMenu(self.menu, action)
         self.actions = []
+        if self.panel is not None:
+            self.iface.removePluginMenu(self.menu, self.act_panel)
+            self.iface.removeDockWidget(self.panel)
+            self.panel.deleteLater()
+            self.panel = self.act_panel = None
         self._capability_actions = {}
         if self.toolbar:
             self.iface.mainWindow().removeToolBar(self.toolbar)
@@ -122,6 +143,8 @@ class ValetudoPlugin:
         self.client.commandDone.connect(self._on_command_done)
         self.client.mapReceived.connect(self._on_map)
         self.client.capabilitiesReceived.connect(self._on_capabilities)
+        if self.panel is not None:
+            self.panel.attach(self.client)
         self.client.fetch_capabilities()
         return self.client
 
@@ -130,6 +153,8 @@ class ValetudoPlugin:
             self.client.stop_polling()
             self.client.deleteLater()
             self.client = None
+            if self.panel is not None:
+                self.panel.attach(None)
         if hasattr(self, "act_live"):
             self.act_live.setChecked(False)
         self._on_capabilities(None)  # unknown robot: re-enable everything
@@ -234,6 +259,8 @@ class ValetudoPlugin:
     # ------------------------------------------------------------------
 
     def _on_map(self, map_json):
+        if self.panel is not None:
+            self.panel.update_map(map_json)
         if not self.layers.exists():
             self._prepare_project()
         if self.layers.update(map_json):

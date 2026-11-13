@@ -15,15 +15,30 @@ from qgis.core import QgsApplication, QgsNetworkAccessManager, QgsPointXY
 
 from .coords import q2v
 
-COMMAND_KEYS = ("start", "pause", "stop", "home", "segments", "zone", "goto")
+COMMAND_KEYS = ("start", "pause", "stop", "home", "segments", "zone", "goto",
+                "fan_speed", "water_usage")
+
+# Preset capabilities handled by set_preset(), with their command key.
+PRESET_CAPABILITIES = {
+    "FanSpeedControlCapability": "fan_speed",
+    "WaterUsageControlCapability": "water_usage",
+}
 
 
 class ValetudoClient(QObject):
     robotInfoReceived = pyqtSignal(dict)
+    versionReceived = pyqtSignal(dict)
     capabilitiesReceived = pyqtSignal(list)
     attributesReceived = pyqtSignal(list)
     mapReceived = pyqtSignal(dict)
+    consumablesReceived = pyqtSignal(list)
+    currentStatisticsReceived = pyqtSignal(list)
+    totalStatisticsReceived = pyqtSignal(list)
+    wifiReceived = pyqtSignal(dict)
+    eventsReceived = pyqtSignal(list)
+    presetsReceived = pyqtSignal(str, list)   # capability name, preset names
     commandDone = pyqtSignal(str)
+    reachable = pyqtSignal(bool)              # emitted after every request
     error = pyqtSignal(str)
 
     def __init__(self, base_url, authcfg="", parent=None):
@@ -47,23 +62,27 @@ class ValetudoClient(QObject):
                 req = res[1]
         return req
 
-    def _get(self, path, callback, on_finish=None):
-        self._track(self.nam.get(self._request(path)), callback, on_finish)
+    def _get(self, path, callback, on_finish=None, quiet=False):
+        self._track(self.nam.get(self._request(path)), callback, on_finish, quiet)
 
     def _put(self, path, payload, callback=None):
         body = QByteArray(json.dumps(payload).encode())
         self._track(self.nam.put(self._request(path), body), callback)
 
-    def _track(self, reply, callback, on_finish=None):
+    def _track(self, reply, callback, on_finish=None, quiet=False):
+        """quiet=True: background request, failures only emit reachable(False)."""
         self._replies.add(reply)
 
         def finished():
             self._replies.discard(reply)
             try:
                 if reply.error() != QNetworkReply.NetworkError.NoError:
-                    # errorString() is already localised by Qt
-                    self.error.emit(f"{reply.url().toString()}: {reply.errorString()}")
+                    self.reachable.emit(False)
+                    if not quiet:
+                        # errorString() is already localised by Qt
+                        self.error.emit(f"{reply.url().toString()}: {reply.errorString()}")
                     return
+                self.reachable.emit(True)
                 raw = bytes(reply.readAll())
                 data = json.loads(raw) if raw.strip() else None
                 if callback:
@@ -77,16 +96,54 @@ class ValetudoClient(QObject):
 
         reply.finished.connect(finished)
 
+    @staticmethod
+    def _as_list(data):
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            return list(data.values())
+        return []
+
     # -- reading ------------------------------------------------------------
 
-    def fetch_robot_info(self):
-        self._get("/robot", self.robotInfoReceived.emit)
+    def fetch_robot_info(self, quiet=False):
+        self._get("/robot", lambda d: self.robotInfoReceived.emit(d or {}), quiet=quiet)
 
-    def fetch_capabilities(self):
-        self._get("/robot/capabilities", self.capabilitiesReceived.emit)
+    def fetch_version(self, quiet=False):
+        self._get("/valetudo/version", lambda d: self.versionReceived.emit(d or {}), quiet=quiet)
 
-    def fetch_attributes(self):
-        self._get("/robot/state/attributes", self.attributesReceived.emit)
+    def fetch_capabilities(self, quiet=False):
+        self._get("/robot/capabilities",
+                  lambda d: self.capabilitiesReceived.emit(self._as_list(d)), quiet=quiet)
+
+    def fetch_attributes(self, quiet=False):
+        """Status, battery, presets, attachments, dock status..."""
+        self._get("/robot/state/attributes",
+                  lambda d: self.attributesReceived.emit(self._as_list(d)), quiet=quiet)
+
+    def fetch_consumables(self, quiet=False):
+        self._get("/robot/capabilities/ConsumableMonitoringCapability",
+                  lambda d: self.consumablesReceived.emit(self._as_list(d)), quiet=quiet)
+
+    def fetch_current_statistics(self, quiet=False):
+        self._get("/robot/capabilities/CurrentStatisticsCapability",
+                  lambda d: self.currentStatisticsReceived.emit(self._as_list(d)), quiet=quiet)
+
+    def fetch_total_statistics(self, quiet=False):
+        self._get("/robot/capabilities/TotalStatisticsCapability",
+                  lambda d: self.totalStatisticsReceived.emit(self._as_list(d)), quiet=quiet)
+
+    def fetch_wifi(self, quiet=False):
+        self._get("/robot/capabilities/WifiConfigurationCapability",
+                  lambda d: self.wifiReceived.emit(d or {}), quiet=quiet)
+
+    def fetch_events(self, quiet=False):
+        self._get("/events", lambda d: self.eventsReceived.emit(self._as_list(d)), quiet=quiet)
+
+    def fetch_presets(self, capability, quiet=False):
+        self._get(f"/robot/capabilities/{capability}/presets",
+                  lambda d: self.presetsReceived.emit(capability, self._as_list(d)),
+                  quiet=quiet)
 
     def fetch_map(self):
         if self._map_pending:  # do not pile up requests if the robot is slow
@@ -107,13 +164,18 @@ class ValetudoClient(QObject):
 
     # -- commands -----------------------------------------------------------
 
-    def _command(self, capability, payload, key):
-        self._put(f"/robot/capabilities/{capability}", payload,
+    def _command(self, capability, payload, key, path_suffix=""):
+        self._put(f"/robot/capabilities/{capability}{path_suffix}", payload,
                   lambda _data: self.commandDone.emit(key))
 
     def basic_control(self, action):
         """action: 'start', 'stop', 'pause' or 'home'."""
         self._command("BasicControlCapability", {"action": action}, action)
+
+    def set_preset(self, capability, name):
+        """Select a preset (e.g. fan speed 'high') on a preset capability."""
+        self._command(capability, {"name": name}, PRESET_CAPABILITIES.get(capability, capability),
+                      path_suffix="/preset")
 
     def clean_segments(self, segment_ids, iterations=1):
         self._command("MapSegmentationCapability", {

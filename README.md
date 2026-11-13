@@ -35,6 +35,13 @@ without restarting QGIS.
 5. **Clean zone**: drag a rectangle on the map; the robot cleans that zone.
 6. **Go here**: click on the map; the robot drives to that spot.
 
+7. **Status panel**: a dockable panel with the robot state, battery, errors, fan
+   speed and water usage (editable), current and total statistics, consumables,
+   attachments, position, Wi-Fi, supported features and recent events. It has its
+   own Start / Pause / Stop / Return to dock buttons and refreshes itself while it
+   is visible (every 5 s while the robot works, every 30 s otherwise), even when
+   the robot is docked.
+
 Actions the robot does not support are greyed out. Zone and go-to tools need the
 map to be shown first, and switch back to the Pan tool after each use.
 
@@ -50,6 +57,7 @@ is the Swagger UI embedded in the robot: `http://<robot-ip>/swagger/`.
 | `plugin.py`                  | Toolbar, menu, wiring between client and layers         |
 | `client.py`                  | Asynchronous HTTP calls to the Valetudo API             |
 | `map_layers.py`              | Map JSON -> QGIS layers, incremental updates            |
+| `status_panel.py`            | Dockable status panel with controls                     |
 | `map_tools.py`               | Map tools: draw a cleaning zone, pick a go-to target    |
 | `coords.py`                  | Frame conversion (the only place that flips the Y axis) |
 | `settings_dialog.py`         | Settings (URL, authentication, refresh interval)        |
@@ -73,7 +81,6 @@ To add a language, copy the `.ts` file to `valetudo_qgis_<lang>.ts`, set its
 
 - Option to keep the robot centred during live tracking.
 - Replace polling with Valetudo's SSE stream.
-- Battery and status in a dock widget (`/robot/state/attributes`).
 
 ## License
 

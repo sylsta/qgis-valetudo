@@ -23,6 +23,7 @@ from qgis.PyQt.QtWidgets import (
     QGridLayout,
     QScrollArea,
     QSizePolicy,
+    QTabWidget,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -33,7 +34,12 @@ from qgis.gui import QgsDockWidget
 from .camera_widget import CameraWidget
 from .i18n import tr
 
-KEY_CAMERA_OPEN = "valetudo/camera_section_open"
+KEY_TAB = "valetudo/panel_tab"
+STATE_COLORS = {
+    "cleaning": "#1565c0", "moving": "#1565c0", "manual_control": "#1565c0",
+    "returning": "#ef6c00", "paused": "#f9a825", "docked": "#2e7d32",
+    "idle": "#757575", "error": "#c62828",
+}
 ACTIVE_INTERVAL_MS = 5_000
 IDLE_INTERVAL_MS = 30_000
 ACTIVE_STATES = {"cleaning", "returning", "moving", "manual_control"}
@@ -305,11 +311,25 @@ class ValetudoPanel(QgsDockWidget):
         label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         return label
 
-    def _build_ui(self):
-        content = QWidget()
-        self._layout = QVBoxLayout(content)
+    def _page(self, title, key):
+        """A scrollable tab page; following sections are added to it."""
+        page = QWidget()
+        self._layout = QVBoxLayout(page)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(page)
+        self.tabs.addTab(scroll, title)
+        self._tab_keys.append(key)
+        return scroll
 
-        # Header: connection, robot, refresh button
+    def _end_page(self):
+        self._layout.addStretch(1)
+
+    def _build_ui(self):
+        root = QWidget()
+        root_layout = QVBoxLayout(root)
+
+        # -- Summary header, always visible above the tabs --------------------------
         header = QHBoxLayout()
         self.lbl_connection = QLabel()
         header.addWidget(self.lbl_connection, 1)
@@ -318,53 +338,55 @@ class ValetudoPanel(QgsDockWidget):
         btn_refresh.setToolTip(tr("Refresh now"))
         btn_refresh.clicked.connect(self.refresh)
         header.addWidget(btn_refresh)
-        self._layout.addLayout(header)
+        root_layout.addLayout(header)
+
         self.lbl_robot = QLabel()
         self.lbl_robot.setWordWrap(True)
-        self._layout.addWidget(self.lbl_robot)
+        self.lbl_robot.setStyleSheet("color: palette(mid);")
+        root_layout.addWidget(self.lbl_robot)
 
-        # Controls: filled by set_actions() with the plugin's own QActions, so the
-        # toolbar, the menu and the panel share one state (enabled, checked).
-        # A grid of buttons, not a toolbar: a narrow panel must never hide a
-        # button behind an overflow arrow.
+        summary = QHBoxLayout()
+        self.lbl_badge = QLabel()        # coloured state pill
+        self.lbl_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._set_badge(None)
+        summary.addWidget(self.lbl_badge)
+        self.bar_battery = QProgressBar()
+        self.bar_battery.setRange(0, 100)
+        self.bar_battery.setMaximumHeight(18)
+        self.bar_battery.setToolTip(tr("Battery"))
+        summary.addWidget(self.bar_battery, 1)
+        root_layout.addLayout(summary)
+
+        self.lbl_error = QLabel()
+        self.lbl_error.setWordWrap(True)
+        self.lbl_error.setStyleSheet("color: #c62828; font-weight: bold;")
+        self.lbl_error.setVisible(False)
+        root_layout.addWidget(self.lbl_error)
+
+        # Commands: drop-down + Run, filled by set_actions() with the plugin's QActions.
         self._actions_widget = QWidget()
         self._actions_grid = QGridLayout(self._actions_widget)
         self._actions_grid.setContentsMargins(0, 0, 0, 0)
-        self._layout.addWidget(self._actions_widget)
+        root_layout.addWidget(self._actions_widget)
 
-        # Camera: plays while the panel is visible and this section is ticked.
-        self.box_camera = QGroupBox(tr("Camera"))
-        self.box_camera.setCheckable(True)
-        self.box_camera.setChecked(QgsSettings().value(KEY_CAMERA_OPEN, True, type=bool))
-        camera_layout = QVBoxLayout(self.box_camera)
-        self.camera = CameraWidget()
-        camera_layout.addWidget(self.camera)
-        self.camera_light = QCheckBox(tr("Camera light"))
-        self.camera_light.setVisible(False)    # shown if the robot supports it
-        self.camera_light.clicked.connect(self._on_camera_light_clicked)  # user only
-        camera_layout.addWidget(self.camera_light)
-        self.camera.setVisible(self.box_camera.isChecked())
-        self.box_camera.toggled.connect(self._on_camera_toggled)
-        self._layout.addWidget(self.box_camera)
+        # -- Tabs ---------------------------------------------------------------------
+        self.tabs = QTabWidget()
+        self.tabs.setDocumentMode(True)
+        self._tab_keys = []
+        root_layout.addWidget(self.tabs, 1)
 
-        # Status
+        # Robot
+        self._page(tr("Robot"), "robot")
         self.box_status, form = self._section(tr("Status"), "status")
         self.lbl_state = self._value_label()
         form.addRow(tr("State"), self.lbl_state)
-        self.bar_battery = QProgressBar()
-        self.bar_battery.setRange(0, 100)
-        form.addRow(tr("Battery"), self.bar_battery)
         self.lbl_dock = self._value_label()
         form.addRow(tr("Dock"), self.lbl_dock)
-        self.lbl_error = self._value_label()
-        self.lbl_error.setStyleSheet("color: #c62828; font-weight: bold;")
-        form.addRow(tr("Error"), self.lbl_error)
         self._status_form = form
 
         # Dock station: fresh/waste water tanks, detergent, dust bag (rows rebuilt on update)
         self.box_dock, self._dock_form = self._section(tr("Dock station"), "dock")
 
-        # Settings (presets)
         self.box_settings, form = self._section(tr("Settings"), "settings")
         self.preset_combos = {}
         for capability, text in (("FanSpeedControlCapability", tr("Fan speed")),
@@ -375,25 +397,6 @@ class ValetudoPanel(QgsDockWidget):
             self.preset_combos[capability] = combo
         self._settings_form = form
 
-        # Statistics
-        self.box_current, form = self._section(tr("Current or last cleaning"), "current")
-        self.lbl_cur_time = self._value_label()
-        self.lbl_cur_area = self._value_label()
-        form.addRow(tr("Duration"), self.lbl_cur_time)
-        form.addRow(tr("Area"), self.lbl_cur_area)
-
-        self.box_total, form = self._section(tr("Totals"), "totals")
-        self.lbl_tot_count = self._value_label()
-        self.lbl_tot_time = self._value_label()
-        self.lbl_tot_area = self._value_label()
-        form.addRow(tr("Cleanings"), self.lbl_tot_count)
-        form.addRow(tr("Duration"), self.lbl_tot_time)
-        form.addRow(tr("Area"), self.lbl_tot_area)
-
-        # Consumables (rows rebuilt on each update)
-        self.box_consumables, self._consumables_form = self._section(tr("Consumables"), "consumables")
-
-        # Attachments, position, Wi-Fi, features
         self.box_attachments, form = self._section(tr("Attachments"), "attachments")
         self.lbl_attachments = self._value_label()
         form.addRow(self.lbl_attachments)
@@ -402,30 +405,73 @@ class ValetudoPanel(QgsDockWidget):
         self.lbl_position = self._value_label()
         self.lbl_position.setText(tr("Waiting for the robot position…"))
         form.addRow(self.lbl_position)
+        self._end_page()
 
-        self.box_wifi, form = self._section(tr("Wi-Fi"), "wifi", open_default=False)
+        # Camera: plays only while this tab is shown and the panel is visible.
+        self.camera_page = self._page(tr("Camera"), "camera")
+        self.camera = CameraWidget()
+        self._layout.addWidget(self.camera)
+        self.camera_light = QCheckBox(tr("Camera light"))
+        self.camera_light.setVisible(False)    # shown if the robot supports it
+        self.camera_light.clicked.connect(self._on_camera_light_clicked)  # user only
+        self._layout.addWidget(self.camera_light)
+        self._end_page()
+
+        # Maintenance
+        self._page(tr("Maintenance"), "maintenance")
+        self.box_consumables, self._consumables_form = self._section(
+            tr("Consumables"), "consumables")
+        self.box_current, form = self._section(tr("Current or last cleaning"), "current")
+        self.lbl_cur_time = self._value_label()
+        self.lbl_cur_area = self._value_label()
+        form.addRow(tr("Duration"), self.lbl_cur_time)
+        form.addRow(tr("Area"), self.lbl_cur_area)
+        self.box_total, form = self._section(tr("Totals"), "totals")
+        self.lbl_tot_count = self._value_label()
+        self.lbl_tot_time = self._value_label()
+        self.lbl_tot_area = self._value_label()
+        form.addRow(tr("Cleanings"), self.lbl_tot_count)
+        form.addRow(tr("Duration"), self.lbl_tot_time)
+        form.addRow(tr("Area"), self.lbl_tot_area)
+        self._end_page()
+
+        # Info
+        self._page(tr("Info"), "info")
+        self.box_wifi, form = self._section(tr("Wi-Fi"), "wifi")
         self.lbl_wifi = self._value_label()
         form.addRow(self.lbl_wifi)
-
-        self.box_features, form = self._section(tr("Features"), "features", open_default=False)
+        self.box_events, form = self._section(tr("Recent events"), "events")
+        self.list_events = QListWidget()
+        self.list_events.setMaximumHeight(200)
+        form.addRow(self.list_events)
+        self.box_features, form = self._section(tr("Features"), "features")
         self.lbl_features = self._value_label()
         form.addRow(self.lbl_features)
+        self._end_page()
 
-        # Events
-        self.box_events, form = self._section(tr("Recent events"), "events", open_default=False)
-        self.list_events = QListWidget()
-        self.list_events.setMaximumHeight(160)
-        form.addRow(self.list_events)
-
-        self._layout.addStretch(1)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(content)
-        self.setWidget(scroll)
+        last = QgsSettings().value(KEY_TAB, "robot", type=str)
+        if last in self._tab_keys:
+            self.tabs.setCurrentIndex(self._tab_keys.index(last))
+        self.tabs.currentChanged.connect(self._on_tab_changed)
+        self.setWidget(root)
 
         for box in (self.box_settings, self.box_current, self.box_total, self.box_consumables,
                     self.box_attachments, self.box_wifi, self.box_dock):
             box.setVisible(False)   # shown once the robot reports them
+
+    def _set_badge(self, state):
+        """Coloured pill with the robot state, readable at a glance."""
+        color = STATE_COLORS.get(state, "#757575")
+        text = _label(_state_labels(), state) if state else tr("Unknown")
+        self.lbl_badge.setText(text)
+        self.lbl_badge.setStyleSheet(
+            f"background-color: {color}; color: white; font-weight: bold;"
+            "border-radius: 9px; padding: 2px 10px;")
+
+    def _on_tab_changed(self, index):
+        if 0 <= index < len(self._tab_keys):
+            QgsSettings().setValue(KEY_TAB, self._tab_keys[index])
+        self._update_camera()
 
     def set_actions(self, commands, buttons=()):
         """Commands in a drop-down list with a Run button; `buttons` as full-width buttons.
@@ -502,6 +548,8 @@ class ValetudoPanel(QgsDockWidget):
                 box.setVisible(False)
             self.lbl_features.setText("—")
             self.camera_light.setVisible(False)
+            self._set_badge(None)
+            self.lbl_error.setVisible(False)
             return
         client.reachable.connect(self._on_reachable)
         client.robotInfoReceived.connect(self._on_robot_info)
@@ -533,14 +581,9 @@ class ValetudoPanel(QgsDockWidget):
         if capability == "CameraLightControlCapability":
             self.camera_light.setChecked(enabled)   # setChecked does not emit clicked
 
-    def _on_camera_toggled(self, checked):
-        QgsSettings().setValue(KEY_CAMERA_OPEN, checked)
-        self.camera.setVisible(checked)
-        self._update_camera()
-
     def _update_camera(self):
-        """Play only while the panel is visible and the camera section is ticked."""
-        if self.isVisible() and self.box_camera.isChecked():
+        """Play only while the panel is visible and the Camera tab is shown."""
+        if self.isVisible() and self.tabs.currentWidget() is self.camera_page:
             if not self.camera.stream.is_running():
                 self.camera.play()
         else:
@@ -689,6 +732,7 @@ class ValetudoPanel(QgsDockWidget):
                 if flag and flag != "none":
                     text += f" ({_label(flags, flag)})"
                 self.lbl_state.setText(text)
+                self._set_badge(state)
                 err = attr.get("error") or {}
                 error_text = (err.get("message") if isinstance(err, dict) else "") \
                     or (attr.get("metaData") or {}).get("error_description", "")
@@ -717,8 +761,8 @@ class ValetudoPanel(QgsDockWidget):
 
         _set_row_visible(self._status_form, self.lbl_dock, dock_value is not None)
         self.lbl_dock.setText(_label(states, dock_value))
-        _set_row_visible(self._status_form, self.lbl_error, bool(error_text))
-        self.lbl_error.setText(error_text)
+        self.lbl_error.setVisible(bool(error_text))
+        self.lbl_error.setText(f"⚠ {error_text}" if error_text else "")
         self.box_attachments.setVisible(bool(attachments))
         self._update_dock_components(components)
         self.lbl_attachments.setText("   ".join(attachments))

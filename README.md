@@ -35,24 +35,26 @@ without restarting QGIS.
 5. **Clean zone**: drag a rectangle on the map; the robot cleans that zone.
 6. **Go here**: click on the map; the robot drives to that spot.
 
-7. **Status panel**: a dockable panel with the robot state, battery, errors, fan
-   speed and water usage (editable), dock station state (fresh and waste water
-   tanks, detergent, dust bag), current and total statistics, consumables,
-   attachments, position, Wi-Fi, supported features and recent events. It has its
-   own command list (Start … Go here and Reboot robot, pick one and click Run),
-   and refreshes itself while it
-   is visible (every 5 s while the robot works, every 30 s otherwise), even when
-   the robot is docked. Every section folds by unticking its title (remembered);
-   Wi-Fi, Features and Recent events start folded. The robot position is read
-   by the panel itself, no need to show the map.
+7. **Status panel**: a dockable panel. Always visible at the top: connection,
+   robot model, a coloured state badge, the battery, any robot error, and the
+   command list (Start … Go here and Reboot robot: pick one and click Run).
+   Below, four tabs (the last one used is remembered):
+   - **Robot**: state details, dock station (fresh and waste water tanks,
+     detergent, dust bag), fan speed and water usage (editable), attachments,
+     position (read by the panel itself, no need to show the map);
+   - **Camera**: live video, plays only while this tab is shown;
+   - **Maintenance**: consumables, current and total statistics;
+   - **Info**: Wi-Fi, recent events, supported features.
+   It refreshes itself while visible (every 5 s while the robot works, every
+   30 s otherwise), even when the robot is docked. Sections fold by unticking
+   their title.
 
-8. **Camera**: a "Camera" section at the top of the status panel shows the
-   robot's live video, for robots that expose a raw H.264 stream over TCP
-   (default `tcp://<robot>:8555`). It needs **ffmpeg** (found in the `PATH`, or
-   set its path in the settings). Video plays while the panel is visible and the
-   section is ticked; untick it to stop the video. Robots with a camera light
-   get a "Camera light" switch under the video. The stream reconnects by itself
-   if it drops, and **Save snapshot** saves the current image as PNG.
+8. **Camera**: the Camera tab of the status panel shows the robot's live video,
+   for robots that expose a raw H.264 stream over TCP (default
+   `tcp://<robot>:8555`). It needs **ffmpeg** (found in the `PATH`, or set its
+   path in the settings). The stream reconnects by itself if it drops, **Save
+   snapshot** saves the current image as PNG, and robots with a camera light get
+   a "Camera light" switch.
 
 **Dock station notifications**: once a robot is configured, the plugin checks
 the dock every minute in the background (panel open or not) and shows a

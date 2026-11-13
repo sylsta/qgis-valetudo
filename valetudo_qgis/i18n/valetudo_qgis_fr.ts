@@ -803,5 +803,13 @@ Un nettoyage en cours sera interrompu. Le robot sera injoignable pendant une ou 
         <source>Run</source>
         <translation>Exécuter</translation>
     </message>
+    <message>
+        <source>Maintenance</source>
+        <translation>Entretien</translation>
+    </message>
+    <message>
+        <source>Info</source>
+        <translation>Infos</translation>
+    </message>
 </context>
 </TS>

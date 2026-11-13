@@ -6,11 +6,14 @@ enabled/checked state can never disagree.
 """
 
 from qgis.PyQt.QtCore import Qt, QTimer, QUrl
-from qgis.PyQt.QtWidgets import QAction, QMessageBox, QPushButton
-from qgis.core import Qgis, QgsCoordinateReferenceSystem, QgsMessageLog, QgsProject
+from qgis.PyQt.QtWidgets import QAction, QCheckBox, QMessageBox, QPushButton
+from qgis.core import (
+    Qgis, QgsCoordinateReferenceSystem, QgsMessageLog, QgsProject, QgsSettings,
+)
 
 from .boot_monitor import BootMonitor
 from .client import ValetudoClient
+from .goto_emulation import ZONE_SIZE_CM as GOTO_ZONE_SIZE_CM, GoToEmulator
 from .i18n import install_translator, remove_translator, tr
 from .icons import has_icon, icon
 from .map_layers import ValetudoLayers, layer_names
@@ -27,10 +30,17 @@ from .status_panel import (
     dock_component_values,
 )
 
+KEY_GOTO_ZONE_OK = "valetudo/goto_zone_confirmed"
 MIN_ZONE_SIZE_CM = 20  # smaller rectangles are treated as accidental clicks
 WATCH_INTERVAL_MS = 60_000  # background check of the dock station, panel open or not
 
 # Valetudo capability required by each action (absent: always available).
+# Alternatives: an action is also available with any of these capabilities.
+# "Go here" falls back to a tiny zone clean followed by a pause (see goto_emulation.py).
+ALTERNATIVE_CAPABILITIES = {
+    "goto": ["ZoneCleaningCapability"],
+}
+
 REQUIRED_CAPABILITY = {
     "start": "BasicControlCapability",
     "pause": "BasicControlCapability",
@@ -140,6 +150,8 @@ class ValetudoPlugin:
                          self.send_restrictions)
         self._new_action("watch_boot", tr("Watch robot boot"), self.watch_boot)
         self._new_action("reboot", tr("Reboot robot (SSH)…"), self.reboot_robot)
+        self.goto_emulator = GoToEmulator()
+        self.goto_emulator.finished.connect(self._on_goto_finished)
         self.boot = BootMonitor()
         self.boot.stage.connect(self._on_boot_stage)
         self.boot.logTail.connect(self._on_boot_log_tail)
@@ -195,6 +207,8 @@ class ValetudoPlugin:
         self._hide_edit_bar()
         if getattr(self, "boot", None) is not None:
             self.boot.stop()
+        if getattr(self, "goto_emulator", None) is not None:
+            self.goto_emulator.stop()
         if self._watch is not None:
             self._watch.stop()
             self._watch = None
@@ -255,6 +269,8 @@ class ValetudoPlugin:
         return self.client
 
     def _drop_client(self):
+        if getattr(self, "goto_emulator", None) is not None:
+            self.goto_emulator.stop()
         if self.client:
             self.client.stop_polling()
             self.client.deleteLater()
@@ -277,7 +293,8 @@ class ValetudoPlugin:
             action = self.act.get(key)
             if action is None:
                 continue
-            ok = self.capabilities is None or capability in self.capabilities
+            needed = [capability] + ALTERNATIVE_CAPABILITIES.get(key, [])
+            ok = self.capabilities is None or any(c in self.capabilities for c in needed)
             if not ok and action.isChecked():
                 self.iface.actionPan().trigger()   # leave a map tool that became unsupported
             action.setEnabled(ok)
@@ -511,8 +528,43 @@ class ValetudoPlugin:
     def _on_goto(self, point):
         self.iface.actionPan().trigger()
         client = self._get_client()
-        if client:
+        if not client:
+            return
+        if self.capabilities is None or "GoToLocationCapability" in self.capabilities:
             client.go_to_qgis(point)
+            return
+        # No native go-to: tiny zone clean towards the point, then pause on arrival.
+        if not QgsSettings().value(KEY_GOTO_ZONE_OK, False, type=bool):
+            box = QMessageBox(QMessageBox.Icon.Question, tr("Go here"),
+                              tr("This robot cannot simply drive to a point. The plugin will "
+                                 "send it to clean a small zone ({size} cm) at that point, "
+                                 "then pause it as soon as it arrives.\n\n"
+                                 "It vacuums on its way, and mops if mopping is on.\n\n"
+                                 "Continue?").format(size=GOTO_ZONE_SIZE_CM),
+                              QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                              self.iface.mainWindow())
+            box.setDefaultButton(QMessageBox.StandardButton.No)
+            dont_ask = QCheckBox(tr("Don't ask again"))
+            box.setCheckBox(dont_ask)
+            if box.exec() != QMessageBox.StandardButton.Yes:
+                return
+            if dont_ask.isChecked():
+                QgsSettings().setValue(KEY_GOTO_ZONE_OK, True)
+        self.goto_emulator.start(client, point)
+        self._message(tr("Robot on its way; it will be paused on arrival."),
+                      Qgis.MessageLevel.Info)
+
+    def _on_goto_finished(self, result, detail):
+        if result == "arrived":
+            self._message(tr("Robot arrived ({distance} cm from the point) and paused. "
+                             "Use “Return to dock” to send it back.").format(distance=detail),
+                          Qgis.MessageLevel.Success)
+        elif result == "gave_up":
+            self._message(tr("The robot stopped before reaching the point (state: {state}).")
+                          .format(state=dock_state_label(detail)), Qgis.MessageLevel.Warning)
+        elif result == "timeout":
+            self._message(tr("The robot did not reach the point within {minutes} min.")
+                          .format(minutes=detail), Qgis.MessageLevel.Warning)
 
     # -- reboot over SSH --------------------------------------------------------
 

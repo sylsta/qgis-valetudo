@@ -985,5 +985,37 @@ Ils remplacent toutes les restrictions actuellement sur le robot.</translation>
         <source>Discard changes</source>
         <translation>Annuler les modifications</translation>
     </message>
+    <message>
+        <source>This robot cannot simply drive to a point. The plugin will send it to clean a small zone ({size} cm) at that point, then pause it as soon as it arrives.
+
+It vacuums on its way, and mops if mopping is on.
+
+Continue?</source>
+        <translation>Ce robot ne sait pas simplement aller à un point. Le plugin va lui demander de nettoyer une petite zone ({size} cm) à cet endroit, puis le mettre en pause dès son arrivée.
+
+Il aspire en chemin, et passe la serpillière si elle est activée.
+
+Continuer ?</translation>
+    </message>
+    <message>
+        <source>Don't ask again</source>
+        <translation>Ne plus demander</translation>
+    </message>
+    <message>
+        <source>Robot on its way; it will be paused on arrival.</source>
+        <translation>Robot en route ; il sera mis en pause à l'arrivée.</translation>
+    </message>
+    <message>
+        <source>Robot arrived ({distance} cm from the point) and paused. Use “Return to dock” to send it back.</source>
+        <translation>Robot arrivé (à {distance} cm du point) et mis en pause. Utilisez « Retour à la base » pour le renvoyer.</translation>
+    </message>
+    <message>
+        <source>The robot stopped before reaching the point (state: {state}).</source>
+        <translation>Le robot s'est arrêté avant d'atteindre le point (état : {state}).</translation>
+    </message>
+    <message>
+        <source>The robot did not reach the point within {minutes} min.</source>
+        <translation>Le robot n'a pas atteint le point en {minutes} min.</translation>
+    </message>
 </context>
 </TS>

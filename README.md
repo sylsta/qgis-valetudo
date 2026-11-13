@@ -33,7 +33,11 @@ without restarting QGIS.
 4. Select rooms in the "Valetudo - map" layer (rooms are labelled with their
    Valetudo names), then **Clean selected rooms**.
 5. **Clean zone**: drag a rectangle on the map; the robot cleans that zone.
-6. **Go here**: click on the map; the robot drives to that spot.
+6. **Go here**: click on the map; the robot drives to that spot. Robots without
+   Valetudo's go-to (e.g. Eureka J15 Pro Ultra) get an emulation: the plugin sends
+   a 60 cm zone clean at that spot and pauses the robot as soon as it is within
+   50 cm (it vacuums, and mops if enabled, on its way; a first-time confirmation
+   says so).
 
 7. **Status panel**: a dockable panel. Always visible at the top: connection,
    robot model, a coloured state badge, the battery, any robot error, and icon
@@ -108,6 +112,7 @@ is the Swagger UI embedded in the robot: `http://<robot-ip>/swagger/`.
 | `boot_monitor.py`            | Follows and times the robot's boot, stage by stage      |
 | `ssh_reboot.py`              | Robot reboot over SSH (key-based, non-blocking)         |
 | `restrictions.py`            | Editable no-go zones / virtual walls and their payload  |
+| `goto_emulation.py`          | "Go here" via a tiny zone clean + pause on arrival      |
 | `map_tools.py`               | Map tools: draw a cleaning zone, pick a go-to target    |
 | `coords.py`                  | Frame conversion (the only place that flips the Y axis) |
 | `settings_dialog.py`         | Settings (URL, authentication, refresh interval)        |

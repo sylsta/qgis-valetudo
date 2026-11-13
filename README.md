@@ -78,6 +78,14 @@ confirmation. It needs an SSH client and key-based login to the robot
 (`ssh-copy-id root@<robot>`); no password is ever stored or asked for. SSH user
 and port are in the settings (`root`, 22 by default).
 
+**Boot log**: after *Reboot robot (SSH)…*, or with *Watch robot boot* (e.g.
+after using the power button), the plugin follows the robot's startup and
+times each stage: offline, network up (SSH port answers), Valetudo answers
+(version), robot firmware ready (state, battery), camera stream available, then
+the total boot time and the end of Valetudo's own log. Lines go to the
+*Valetudo* tab of the QGIS *Log Messages* panel and to the *Boot log* section of
+the status panel (Info tab).
+
 Actions the robot does not support are greyed out. Zone and go-to tools need the
 map to be shown first, and switch back to the Pan tool after each use.
 
@@ -96,6 +104,7 @@ is the Swagger UI embedded in the robot: `http://<robot-ip>/swagger/`.
 | `status_panel.py`            | Dockable status panel with controls                     |
 | `camera.py`                  | H.264 stream decoding through an ffmpeg subprocess      |
 | `camera_widget.py`           | Camera video widget, embedded in the status panel       |
+| `boot_monitor.py`            | Follows and times the robot's boot, stage by stage      |
 | `ssh_reboot.py`              | Robot reboot over SSH (key-based, non-blocking)         |
 | `restrictions.py`            | Editable no-go zones / virtual walls and their payload  |
 | `map_tools.py`               | Map tools: draw a cleaning zone, pick a go-to target    |

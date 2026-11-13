@@ -18,6 +18,7 @@ from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QListWidget,
+    QPlainTextEdit,
     QProgressBar,
     QPushButton,
     QGridLayout,
@@ -218,6 +219,11 @@ def _event_label(event):
     if cls == "PendingMapChangeValetudoEvent":
         return tr("Pending map change")
     return cls.replace("ValetudoEvent", "") or "?"
+
+
+def state_label(state):
+    """Translated robot state ("docked" -> "Docked" / "À la base")."""
+    return _label(_state_labels(), state)
 
 
 def _set_row_visible(form, field, visible):
@@ -444,6 +450,12 @@ class ValetudoPanel(QgsDockWidget):
         self.list_events = QListWidget()
         self.list_events.setMaximumHeight(200)
         form.addRow(self.list_events)
+        self.box_boot, form = self._section(tr("Boot log"), "boot")
+        self.txt_boot = QPlainTextEdit()
+        self.txt_boot.setReadOnly(True)
+        self.txt_boot.setMaximumHeight(220)
+        self.txt_boot.setPlaceholderText(tr("Use “Watch robot boot”, or reboot the robot."))
+        form.addRow(self.txt_boot)
         self.box_features, form = self._section(tr("Features"), "features")
         self.lbl_features = self._value_label()
         form.addRow(self.lbl_features)
@@ -588,6 +600,12 @@ class ValetudoPanel(QgsDockWidget):
                 self.camera.play()
         else:
             self.camera.stop()
+
+    def clear_boot_log(self):
+        self.txt_boot.clear()
+
+    def add_boot_log(self, line):
+        self.txt_boot.appendPlainText(line)
 
     def shutdown(self):
         """Called by the plugin on unload."""

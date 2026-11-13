@@ -87,8 +87,11 @@ class ValetudoClient(QObject):
         body = QByteArray(json.dumps(payload).encode())
         self._track(self.nam.put(self._request(path), body), callback)
 
-    def _track(self, reply, callback, on_finish=None, quiet=False):
-        """quiet=True: background request, failures only emit reachable(False)."""
+    def _track(self, reply, callback, on_finish=None, quiet=False, on_error=None, raw=False):
+        """quiet=True: background request, failures only emit reachable(False).
+
+        on_error(message) is called on failure; raw=True passes the body as text.
+        """
         self._replies.add(reply)
 
         def finished():
@@ -96,13 +99,18 @@ class ValetudoClient(QObject):
             try:
                 if reply.error() != QNetworkReply.NetworkError.NoError:
                     self.reachable.emit(False)
+                    if on_error:
+                        on_error(reply.errorString())
                     if not quiet:
                         # errorString() is already localised by Qt
                         self.error.emit(f"{reply.url().toString()}: {reply.errorString()}")
                     return
                 self.reachable.emit(True)
-                raw = bytes(reply.readAll())
-                data = json.loads(raw) if raw.strip() else None
+                body = bytes(reply.readAll())
+                if raw:
+                    data = body.decode("utf-8", "replace")
+                else:
+                    data = json.loads(body) if body.strip() else None
                 if callback:
                     callback(data)
             except Exception as exc:
@@ -167,6 +175,13 @@ class ValetudoClient(QObject):
         self._get(f"/robot/capabilities/{capability}",
                   lambda d: self.toggleReceived.emit(capability, bool((d or {}).get("enabled"))),
                   quiet=quiet)
+
+    def probe(self, path, on_success, on_error, raw=False, timeout_ms=3000):
+        """One-off GET with a short timeout, for the boot monitor (never pushes errors)."""
+        req = self._request(path)
+        if hasattr(req, "setTransferTimeout"):
+            req.setTransferTimeout(timeout_ms)
+        self._track(self.nam.get(req), on_success, quiet=True, on_error=on_error, raw=raw)
 
     def fetch_restrictions(self):
         self._get("/robot/capabilities/CombinedVirtualRestrictionsCapability",

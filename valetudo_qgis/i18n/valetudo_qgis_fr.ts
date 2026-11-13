@@ -881,5 +881,65 @@ Ils remplacent toutes les restrictions actuellement sur le robot.</translation>
         <source>{n} empty or invalid shape(s) are ignored.</source>
         <translation>{n} forme(s) vide(s) ou invalide(s) sont ignorées.</translation>
     </message>
+    <message>
+        <source>Boot log</source>
+        <translation>Journal de démarrage</translation>
+    </message>
+    <message>
+        <source>Use “Watch robot boot”, or reboot the robot.</source>
+        <translation>Utilisez « Suivre le démarrage du robot », ou redémarrez le robot.</translation>
+    </message>
+    <message>
+        <source>Watch robot boot</source>
+        <translation>Suivre le démarrage du robot</translation>
+    </message>
+    <message>
+        <source>Watching the robot boot…</source>
+        <translation>Suivi du démarrage du robot…</translation>
+    </message>
+    <message>
+        <source>Robot went offline (rebooting).</source>
+        <translation>Le robot est hors ligne (redémarrage).</translation>
+    </message>
+    <message>
+        <source>The robot did not go offline: the reboot may not have happened.</source>
+        <translation>Le robot n'est pas passé hors ligne : le redémarrage n'a peut-être pas eu lieu.</translation>
+    </message>
+    <message>
+        <source>Network up: the robot's SSH port answers (system booted).</source>
+        <translation>Réseau actif : le port SSH du robot répond (système démarré).</translation>
+    </message>
+    <message>
+        <source>Valetudo answers (version {version}).</source>
+        <translation>Valetudo répond (version {version}).</translation>
+    </message>
+    <message>
+        <source>Robot firmware ready: {state}, battery {battery} %.</source>
+        <translation>Micrologiciel du robot prêt : {state}, batterie {battery} %.</translation>
+    </message>
+    <message>
+        <source>Camera stream available.</source>
+        <translation>Flux caméra disponible.</translation>
+    </message>
+    <message>
+        <source>Camera stream still not available after {seconds} s.</source>
+        <translation>Flux caméra toujours indisponible après {seconds} s.</translation>
+    </message>
+    <message>
+        <source>Robot fully back after {seconds} s.</source>
+        <translation>Robot entièrement opérationnel après {seconds} s.</translation>
+    </message>
+    <message>
+        <source>The robot is still not back after {minutes} min.</source>
+        <translation>Le robot n'est toujours pas revenu après {minutes} min.</translation>
+    </message>
+    <message>
+        <source>Valetudo's log is not available.</source>
+        <translation>Le journal de Valetudo n'est pas disponible.</translation>
+    </message>
+    <message>
+        <source>End of Valetudo's log:</source>
+        <translation>Fin du journal de Valetudo :</translation>
+    </message>
 </context>
 </TS>

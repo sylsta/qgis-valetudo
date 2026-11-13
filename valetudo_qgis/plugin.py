@@ -7,8 +7,9 @@ enabled/checked state can never disagree.
 
 from qgis.PyQt.QtCore import Qt, QTimer, QUrl
 from qgis.PyQt.QtWidgets import QAction, QMessageBox
-from qgis.core import Qgis, QgsCoordinateReferenceSystem, QgsProject
+from qgis.core import Qgis, QgsCoordinateReferenceSystem, QgsMessageLog, QgsProject
 
+from .boot_monitor import BootMonitor
 from .client import ValetudoClient
 from .i18n import install_translator, remove_translator, tr
 from .map_layers import ValetudoLayers, layer_names
@@ -18,6 +19,7 @@ from .settings_dialog import SettingsDialog, load_settings
 from .ssh_reboot import SshReboot
 from .status_panel import (
     DOCK_COMPONENT_PROBLEMS,
+    state_label as dock_state_label,
     ValetudoPanel,
     dock_component_advice,
     dock_component_labels,
@@ -54,8 +56,9 @@ MAP_ROW = ["show_map", "live", None, "clean_rooms", "zone", "goto"]
 TOOLBAR = ["show_map", "live", None] + ROBOT_ROW + [None, "clean_rooms", "zone", "goto",
                                                     None, "status_panel"]
 MENU = (["settings", "status_panel"] + MAP_ROW + [None] + RESTRICTIONS_ROW + [None] + ROBOT_ROW
-        + [None] + DOCK_ROW + [None, "reboot"])
-PANEL_SYSTEM_ROW = ["reboot"]   # reboot: menu and panel command list, not the toolbar
+        + [None] + DOCK_ROW + [None, "watch_boot", "reboot"])
+PANEL_SYSTEM_ROW = ["watch_boot", "reboot"]   # menu and panel command list, not the toolbar
+LOG_TAG = "Valetudo"   # tab of the QGIS "Log Messages" panel
 
 
 def command_labels():
@@ -129,7 +132,11 @@ class ValetudoPlugin:
                          self.edit_restrictions)
         self._new_action("send_restrictions", tr("Send no-go zones and walls to robot…"),
                          self.send_restrictions)
+        self._new_action("watch_boot", tr("Watch robot boot"), self.watch_boot)
         self._new_action("reboot", tr("Reboot robot (SSH)…"), self.reboot_robot)
+        self.boot = BootMonitor()
+        self.boot.stage.connect(self._on_boot_stage)
+        self.boot.logTail.connect(self._on_boot_log_tail)
         self._reboot = SshReboot()
         self._reboot.finished.connect(self._on_reboot_finished)
 
@@ -174,6 +181,8 @@ class ValetudoPlugin:
         QTimer.singleShot(0, self._watch_tick)
 
     def unload(self):
+        if getattr(self, "boot", None) is not None:
+            self.boot.stop()
         if self._watch is not None:
             self._watch.stop()
             self._watch = None
@@ -484,12 +493,82 @@ class ValetudoPlugin:
         if result == "sent":
             self._message(tr("Reboot command sent. The robot will be back in a minute or two."),
                           Qgis.MessageLevel.Success)
+            self._start_boot_monitor(expect_offline=True)
         elif result == "ssh_missing":
             self._message(tr("ssh not found: install an SSH client."), Qgis.MessageLevel.Critical)
         else:
             self.iface.messageBar().pushMessage(
                 "Valetudo", tr("SSH reboot failed: {detail}").format(detail=detail),
                 level=Qgis.MessageLevel.Critical, duration=0)
+
+    # -- boot monitor -------------------------------------------------------------
+
+    def watch_boot(self, *_):
+        """Follow a boot started elsewhere (power button…), or check that all is up."""
+        self._start_boot_monitor(expect_offline=False)
+
+    def _start_boot_monitor(self, expect_offline):
+        client = self._get_client()
+        if not client:
+            return
+        cfg = load_settings()
+        host = QUrl(cfg["url"]).host()
+        camera_port = QUrl(cfg["camera_url"]).port() if cfg["camera_url"] else -1
+        self.panel.clear_boot_log()
+        self.boot.start(client, host, cfg["ssh_port"],
+                        camera_port if camera_port > 0 else None, expect_offline)
+
+    def _boot_text(self, key, detail):
+        if key == "started":
+            return tr("Watching the robot boot…")
+        if key == "offline":
+            return tr("Robot went offline (rebooting).")
+        if key == "no_offline":
+            return tr("The robot did not go offline: the reboot may not have happened.")
+        if key == "network_up":
+            return tr("Network up: the robot's SSH port answers (system booted).")
+        if key == "valetudo_up":
+            return tr("Valetudo answers (version {version}).").format(version=detail)
+        if key == "robot_ready":
+            state, _, battery = detail.partition(";")
+            state = dock_state_label(state)
+            return tr("Robot firmware ready: {state}, battery {battery} %.").format(
+                state=state, battery=battery)
+        if key == "camera_up":
+            return tr("Camera stream available.")
+        if key == "camera_missing":
+            return tr("Camera stream still not available after {seconds} s.").format(
+                seconds=detail)
+        if key == "done":
+            return tr("Robot fully back after {seconds} s.").format(seconds=detail)
+        if key == "timeout":
+            return tr("The robot is still not back after {minutes} min.").format(minutes=detail)
+        return key
+
+    def _on_boot_stage(self, key, seconds, detail):
+        text = self._boot_text(key, detail)
+        line = f"[+{seconds:5.1f} s] {text}"
+        problem = key in ("no_offline", "camera_missing", "timeout")
+        QgsMessageLog.logMessage(line, LOG_TAG, Qgis.MessageLevel.Warning if problem
+                                 else Qgis.MessageLevel.Info)
+        self.panel.add_boot_log(line)
+        if key == "done":
+            self._message(text, Qgis.MessageLevel.Success)
+        elif problem:
+            self._message(text, Qgis.MessageLevel.Warning)
+
+    def _on_boot_log_tail(self, lines):
+        if not lines:
+            note = tr("Valetudo's log is not available.")
+            QgsMessageLog.logMessage(note, LOG_TAG, Qgis.MessageLevel.Info)
+            self.panel.add_boot_log(note)
+            return
+        header = tr("End of Valetudo's log:")
+        QgsMessageLog.logMessage(header + "\n" + "\n".join(lines), LOG_TAG,
+                                 Qgis.MessageLevel.Info)
+        self.panel.add_boot_log(header)
+        for line in lines:
+            self.panel.add_boot_log("  " + line)
 
     # ------------------------------------------------------------------
     # Incoming data

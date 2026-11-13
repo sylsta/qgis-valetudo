@@ -36,20 +36,20 @@ The panel, from top to bottom:
 
 - **Header**, always visible: connection, robot model, a coloured state badge, the
   battery, any robot error.
-- **Command list + Run**: pick a command and click **Run**. Commands: Start, Pause,
-  Stop, Return to dock, Show map, Live tracking, Clean selected rooms, Clean zone,
-  Go here, no-go zones and walls, Locate, Empty dust bin, Wash / Dry mops, Watch
-  robot boot, Reboot robot (SSH), Settings. Switched-on commands show a ✓;
-  unsupported ones are greyed out.
-  - *Clean selected rooms*: select rooms in the "Valetudo - map" layer first
-    (they are labelled with their Valetudo names).
+- **Quick buttons**: Start, Pause, Return to dock.
+- **Command list + Run**, grouped under headers (Cleaning, Robot, Map, Dock
+  station, System). A line under the list says what the selected command does,
+  or what to do after Run; it then shows the result. Switched-on commands show a
+  ✓; unsupported ones are greyed out.
+  - *Clean selected rooms*: tick rooms in the **Rooms** list of the Robot tab (or
+    select them in the "Valetudo - map" layer).
   - *Clean zone*: then drag a rectangle on the map.
   - *Go here*: then click on the map. Robots without Valetudo's go-to (e.g.
     Eureka J15 Pro Ultra) get an emulation: a 60 cm zone clean at that spot, then
     a pause as soon as the robot is within 50 cm (it cleans on its way; a
     first-time confirmation says so).
 - **Four tabs** (the last one used is remembered):
-  - **Robot**: state details, dock station (fresh and waste water tanks,
+  - **Robot**: rooms checklist, state details, dock station (fresh and waste water tanks,
     detergent, dust bag), fan speed and water usage (editable), attachments,
     position (read by the panel itself, no need to show the map);
   - **Camera**: live video, plays only while this tab is shown; camera light;

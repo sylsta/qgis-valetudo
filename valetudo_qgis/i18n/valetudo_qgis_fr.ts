@@ -76,10 +76,6 @@
         <translation>Commande « {command} » envoyée.</translation>
     </message>
     <message>
-        <source>Select one or more rooms in the “{layer}” layer.</source>
-        <translation>Sélectionnez une ou plusieurs pièces dans la couche « {layer} ».</translation>
-    </message>
-    <message>
         <source>Valetudo – settings</source>
         <translation>Valetudo – paramètres</translation>
     </message>
@@ -1016,6 +1012,90 @@ Continuer ?</translation>
     <message>
         <source>The robot did not reach the point within {minutes} min.</source>
         <translation>Le robot n'a pas atteint le point en {minutes} min.</translation>
+    </message>
+    <message>
+        <source>Start a full cleaning.</source>
+        <translation>Lance un nettoyage complet.</translation>
+    </message>
+    <message>
+        <source>Cleans the rooms ticked in the Robot tab (or selected on the map).</source>
+        <translation>Nettoie les pièces cochées dans l'onglet Robot (ou sélectionnées sur la carte).</translation>
+    </message>
+    <message>
+        <source>After Run, drag a rectangle on the map: that zone is cleaned.</source>
+        <translation>Après Exécuter, tracez un rectangle sur la carte : cette zone est nettoyée.</translation>
+    </message>
+    <message>
+        <source>After Run, click a point on the map: the robot goes there.</source>
+        <translation>Après Exécuter, cliquez un point sur la carte : le robot s'y rend.</translation>
+    </message>
+    <message>
+        <source>Pause the current job.</source>
+        <translation>Met en pause la tâche en cours.</translation>
+    </message>
+    <message>
+        <source>Stop the current job.</source>
+        <translation>Arrête la tâche en cours.</translation>
+    </message>
+    <message>
+        <source>Send the robot back to its dock.</source>
+        <translation>Renvoie le robot à sa base.</translation>
+    </message>
+    <message>
+        <source>The robot beeps, to find it.</source>
+        <translation>Le robot émet un bip, pour le retrouver.</translation>
+    </message>
+    <message>
+        <source>Load the robot's map into QGIS.</source>
+        <translation>Charge la carte du robot dans QGIS.</translation>
+    </message>
+    <message>
+        <source>Refresh the robot position on the map every few seconds.</source>
+        <translation>Actualise la position du robot sur la carte toutes les quelques secondes.</translation>
+    </message>
+    <message>
+        <source>Load no-go zones and walls as layers you can edit.</source>
+        <translation>Charge les zones interdites et les murs dans des couches modifiables.</translation>
+    </message>
+    <message>
+        <source>Send the edited no-go zones and walls to the robot.</source>
+        <translation>Envoie au robot les zones interdites et les murs modifiés.</translation>
+    </message>
+    <message>
+        <source>Empty the robot's dust bin into the dock.</source>
+        <translation>Vide le bac à poussière du robot dans la base.</translation>
+    </message>
+    <message>
+        <source>Wash the mops in the dock.</source>
+        <translation>Lave les serpillières dans la base.</translation>
+    </message>
+    <message>
+        <source>Dry the mops in the dock.</source>
+        <translation>Sèche les serpillières dans la base.</translation>
+    </message>
+    <message>
+        <source>Follow the robot's startup; the log is in the Info tab.</source>
+        <translation>Suit le démarrage du robot ; le journal est dans l'onglet Infos.</translation>
+    </message>
+    <message>
+        <source>Reboot the robot over SSH (asks first).</source>
+        <translation>Redémarre le robot via SSH (demande d'abord).</translation>
+    </message>
+    <message>
+        <source>Robot address, camera, notifications, SSH.</source>
+        <translation>Adresse du robot, caméra, notifications, SSH.</translation>
+    </message>
+    <message>
+        <source>Map</source>
+        <translation>Carte</translation>
+    </message>
+    <message>
+        <source>System</source>
+        <translation>Système</translation>
+    </message>
+    <message>
+        <source>Tick rooms in the Robot tab, or select them in the “{layer}” layer.</source>
+        <translation>Cochez des pièces dans l'onglet Robot, ou sélectionnez-les dans la couche « {layer} ».</translation>
     </message>
 </context>
 </TS>

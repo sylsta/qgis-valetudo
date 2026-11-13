@@ -17,6 +17,7 @@ from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QListWidget,
+    QListWidgetItem,
     QMenu,
     QPlainTextEdit,
     QProgressBar,
@@ -361,11 +362,17 @@ class ValetudoPanel(QgsDockWidget):
         self.lbl_error.setVisible(False)
         root_layout.addWidget(self.lbl_error)
 
-        # Controls: icon buttons + "More" menu, filled by set_actions() with the plugin's
-        # own QActions (same enabled/checked state as the toolbar and the menu).
+        # Controls, filled by set_actions() with the plugin's own QActions (same
+        # enabled/checked state as the menu): quick buttons, then the command list.
+        self._quick = QHBoxLayout()
+        self._quick.setSpacing(4)
+        root_layout.addLayout(self._quick)
         self._controls = QHBoxLayout()
         self._controls.setSpacing(2)
         root_layout.addLayout(self._controls)
+        self.lbl_feedback = QLabel()
+        self.lbl_feedback.setWordWrap(True)
+        root_layout.addWidget(self.lbl_feedback)
 
         # -- Tabs ---------------------------------------------------------------------
         self.tabs = QTabWidget()
@@ -375,6 +382,14 @@ class ValetudoPanel(QgsDockWidget):
 
         # Robot
         self._page(tr("Robot"), "robot")
+        self.box_rooms, form = self._section(tr("Rooms"), "rooms")
+        self.rooms = QListWidget()
+        self.rooms.setMaximumHeight(160)
+        self.rooms.itemChanged.connect(self._on_room_toggled)
+        form.addRow(self.rooms)
+        self.rooms_layout = form
+        self.box_rooms.setVisible(False)
+        self._segments, self._checked_rooms = [], set()
         self.box_status, form = self._section(tr("Status"), "status")
         self.lbl_state = self._value_label()
         form.addRow(tr("State"), self.lbl_state)
@@ -477,50 +492,138 @@ class ValetudoPanel(QgsDockWidget):
             QgsSettings().setValue(KEY_TAB, self._tab_keys[index])
         self._update_camera()
 
-    def set_actions(self, commands):
-        """Every command in one drop-down list, run with the Run button.
+    def set_actions(self, groups, quick=(), room_action=None):
+        """Quick buttons, then a drop-down of commands grouped under headers, run with Run.
 
-        Built from the plugin's own QActions: same text, same enabled/checked
-        state as the menu. None in the list is ignored.
+        groups: [(title, [QAction, …]), …]. Each action's statusTip is shown as a
+        hint when it is selected. room_action is placed under the rooms checklist.
         """
-        layout = self._controls
-        while layout.count():
-            item = layout.takeAt(0)
-            if item.widget() is not None:
-                item.widget().deleteLater()
-        self._commands = [a for a in commands if a is not None]
+        for action in quick:
+            button = QToolButton()
+            button.setDefaultAction(action)
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+            button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            self._quick.addWidget(button)
+        if room_action is not None:
+            button = QToolButton()
+            button.setDefaultAction(room_action)
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+            button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            self.rooms_layout.addRow(button)
+
+        self._commands = []
         self.combo_commands = QComboBox()
         # Never let the longest entry widen the panel (it used to clip the right side).
         self.combo_commands.setSizeAdjustPolicy(
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.combo_commands.setMinimumContentsLength(10)
         self.combo_commands.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        for action in self._commands:
-            self.combo_commands.addItem(action.icon(), action.text())
-            action.changed.connect(self._sync_commands)   # enabled / checked / text
-        self.combo_commands.currentIndexChanged.connect(self._sync_run_button)
+        model = self.combo_commands.model()
+        for title, actions in groups:
+            actions = [a for a in actions if a is not None]
+            if not actions:
+                continue
+            self.combo_commands.addItem(f"— {title} —")
+            header = model.item(self.combo_commands.count() - 1) if hasattr(model, "item") else None
+            if header is not None:
+                header.setEnabled(False)   # a title, not a command
+                font = header.font()
+                font.setBold(True)
+                header.setFont(font)
+            for action in actions:
+                self.combo_commands.addItem(action.icon(), action.text(), len(self._commands))
+                self._commands.append(action)
+                action.changed.connect(self._sync_commands)   # enabled / checked / text
+        self.combo_commands.currentIndexChanged.connect(self._on_command_selected)
+        self.combo_commands.activated.connect(lambda *_: self._show_hint())
         self.btn_run = QPushButton(tr("Run"))
         self.btn_run.clicked.connect(self._run_command)
-        layout.addWidget(self.combo_commands, 1)
-        layout.addWidget(self.btn_run)
+        self._controls.addWidget(self.combo_commands, 1)
+        self._controls.addWidget(self.btn_run)
+        # Start on the first real command, not on a header.
+        for index in range(self.combo_commands.count()):
+            if self.combo_commands.itemData(index) is not None:
+                self.combo_commands.setCurrentIndex(index)
+                break
         self._sync_commands()
+        self._show_hint()
 
     def _current_command(self):
-        index = self.combo_commands.currentIndex()
-        return self._commands[index] if 0 <= index < len(self._commands) else None
+        data = self.combo_commands.itemData(self.combo_commands.currentIndex())
+        return self._commands[data] if isinstance(data, int) else None
 
     def _sync_commands(self, *_):
         """Mirror each action in the list: ✓ when switched on, greyed when unavailable."""
         model = self.combo_commands.model()
-        for i, action in enumerate(self._commands):
+        for index in range(self.combo_commands.count()):
+            data = self.combo_commands.itemData(index)
+            if not isinstance(data, int):
+                continue
+            action = self._commands[data]
             text = action.text()
             if action.isCheckable() and action.isChecked():
                 text += "  ✓"
-            self.combo_commands.setItemText(i, text)
-            item = model.item(i) if hasattr(model, "item") else None
+            self.combo_commands.setItemText(index, text)
+            item = model.item(index) if hasattr(model, "item") else None
             if item is not None:
                 item.setEnabled(action.isEnabled())
+                item.setToolTip(action.statusTip() or action.toolTip())
         self._sync_run_button()
+
+    def _on_command_selected(self, *_):
+        self._sync_run_button()
+        self._show_hint()
+
+    def _show_hint(self):
+        """Under the list: what the selected command does / what to do after Run."""
+        action = self._current_command()
+        hint = action.statusTip() if action is not None else ""
+        if action is not None and not action.isEnabled():
+            hint = action.toolTip()
+        self.lbl_feedback.setStyleSheet("")
+        self.lbl_feedback.setText(hint)
+
+    def show_feedback(self, text, kind="info"):
+        """Called by the plugin with the result of a command."""
+        colors = {"success": "#2e7d32", "warning": "#ef6c00", "critical": "#c62828"}
+        self.lbl_feedback.setStyleSheet(f"color: {colors[kind]};" if kind in colors else "")
+        self.lbl_feedback.setText(text)
+
+    # -- rooms ----------------------------------------------------------------------
+
+    def _on_segments(self, segments):
+        rows = []
+        for seg in segments:
+            if isinstance(seg, dict) and seg.get("id") is not None:
+                seg_id = str(seg["id"])
+                rows.append((seg_id, seg.get("name") or f"{tr('Room')} {seg_id}"))
+        rows.sort(key=lambda r: r[1].lower())
+        if rows == self._segments:
+            return
+        self._segments = rows
+        self._checked_rooms &= {r[0] for r in rows}
+        self.rooms.blockSignals(True)
+        self.rooms.clear()
+        for seg_id, name in rows:
+            item = QListWidgetItem(name)
+            item.setData(Qt.ItemDataRole.UserRole, seg_id)
+            item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(Qt.CheckState.Checked if seg_id in self._checked_rooms
+                               else Qt.CheckState.Unchecked)
+            self.rooms.addItem(item)
+        self.rooms.blockSignals(False)
+        self.box_rooms.setVisible(bool(rows))
+
+    def _on_room_toggled(self, item):
+        seg_id = item.data(Qt.ItemDataRole.UserRole)
+        if item.checkState() == Qt.CheckState.Checked:
+            self._checked_rooms.add(seg_id)
+        else:
+            self._checked_rooms.discard(seg_id)
+
+    def checked_room_ids(self):
+        """Ticked rooms, in list order."""
+        return [seg_id for seg_id, _name in self._segments if seg_id in self._checked_rooms]
 
     def _sync_run_button(self, *_):
         action = self._current_command()
@@ -547,6 +650,9 @@ class ValetudoPanel(QgsDockWidget):
                         self.box_dock):
                 box.setVisible(False)
             self.lbl_features.setText("—")
+            self._segments, self._checked_rooms = [], set()
+            self.rooms.clear()
+            self.box_rooms.setVisible(False)
             self.camera_light.setVisible(False)
             self._set_badge(None)
             self.lbl_error.setVisible(False)
@@ -562,6 +668,7 @@ class ValetudoPanel(QgsDockWidget):
         client.wifiReceived.connect(self._on_wifi)
         client.eventsReceived.connect(self._on_events)
         client.presetsReceived.connect(self._on_presets)
+        client.segmentsReceived.connect(self._on_segments)
         client.toggleReceived.connect(self._on_toggle)
         client.mapPeeked.connect(self.update_map)
         client.commandDone.connect(lambda *_: QTimer.singleShot(1500, self.refresh))
@@ -630,6 +737,8 @@ class ValetudoPanel(QgsDockWidget):
             client.fetch_total_statistics(quiet=True)
         if "WifiConfigurationCapability" in caps:
             client.fetch_wifi(quiet=True)
+        if "MapSegmentationCapability" in caps:
+            client.fetch_segments()
 
     def _on_preset_chosen(self, capability, index):
         combo = self.preset_combos[capability]

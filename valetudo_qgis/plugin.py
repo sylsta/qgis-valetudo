@@ -71,6 +71,30 @@ PANEL_SYSTEM_ROW = ["watch_boot", "reboot"]   # menu and panel command list, not
 LOG_TAG = "Valetudo"   # tab of the QGIS "Log Messages" panel
 
 
+def command_hints():
+    """One line per command: what it does, or what to do after Run."""
+    return {
+        "start": tr("Start a full cleaning."),
+        "clean_rooms": tr("Cleans the rooms ticked in the Robot tab (or selected on the map)."),
+        "zone": tr("After Run, drag a rectangle on the map: that zone is cleaned."),
+        "goto": tr("After Run, click a point on the map: the robot goes there."),
+        "pause": tr("Pause the current job."),
+        "stop": tr("Stop the current job."),
+        "home": tr("Send the robot back to its dock."),
+        "locate": tr("The robot beeps, to find it."),
+        "show_map": tr("Load the robot's map into QGIS."),
+        "live": tr("Refresh the robot position on the map every few seconds."),
+        "edit_restrictions": tr("Load no-go zones and walls as layers you can edit."),
+        "send_restrictions": tr("Send the edited no-go zones and walls to the robot."),
+        "empty_dock": tr("Empty the robot's dust bin into the dock."),
+        "mop_wash": tr("Wash the mops in the dock."),
+        "mop_dry": tr("Dry the mops in the dock."),
+        "watch_boot": tr("Follow the robot's startup; the log is in the Info tab."),
+        "reboot": tr("Reboot the robot over SSH (asks first)."),
+        "settings": tr("Robot address, camera, notifications, SSH."),
+    }
+
+
 def command_labels():
     """Translated labels for the command keys emitted by ValetudoClient."""
     return {
@@ -178,8 +202,21 @@ class ValetudoPlugin:
             if key is not None:
                 self.iface.addPluginToMenu(self.menu, self.act[key])
         # Frequent commands as icon buttons; the others in the panel's "More" menu.
-        self.panel.set_actions([self.act[k] for k in ROBOT_ROW + MAP_ROW + RESTRICTIONS_ROW
-                                + DOCK_ROW + PANEL_SYSTEM_ROW + ["settings"] if k])
+        hints = command_hints()
+        for key, action in self.act.items():
+            if key in hints:
+                action.setStatusTip(hints[key])
+        groups = [
+            (tr("Cleaning"), ["start", "clean_rooms", "zone", "goto"]),
+            (tr("Robot"), ["pause", "stop", "home", "locate"]),
+            (tr("Map"), ["show_map", "live", "edit_restrictions", "send_restrictions"]),
+            (tr("Dock station"), ["empty_dock", "mop_wash", "mop_dry"]),
+            (tr("System"), ["watch_boot", "reboot", "settings"]),
+        ]
+        self.panel.set_actions(
+            [(title, [self.act[k] for k in keys if k in self.act]) for title, keys in groups],
+            quick=[self.act[k] for k in ("start", "pause", "home")],
+            room_action=self.act["clean_rooms"])
 
         canvas = self.iface.mapCanvas()
         self.zone_tool = ZoneMapTool(canvas)
@@ -487,11 +524,12 @@ class ValetudoPlugin:
             client.simple_command(key)
 
     def clean_selected(self, *_):
-        ids = self.layers.selected_segment_ids()
+        ids = (self.panel.checked_room_ids() if self.panel is not None else []) \
+            or self.layers.selected_segment_ids()
         if not ids:
             self._message(
-                tr("Select one or more rooms in the “{layer}” layer.").format(
-                    layer=layer_names()["rooms"]),
+                tr("Tick rooms in the Robot tab, or select them in the “{layer}” layer.")
+                .format(layer=layer_names()["rooms"]),
                 Qgis.MessageLevel.Info)
             return
         client = self._get_client()
@@ -715,3 +753,7 @@ class ValetudoPlugin:
 
     def _message(self, text, level):
         self.iface.messageBar().pushMessage("Valetudo", text, level=level, duration=4)
+        if self.panel is not None:   # echo it under the command list
+            kind = {Qgis.MessageLevel.Success: "success", Qgis.MessageLevel.Warning: "warning",
+                    Qgis.MessageLevel.Critical: "critical"}.get(level, "info")
+            self.panel.show_feedback(text, kind)

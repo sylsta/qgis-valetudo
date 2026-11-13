@@ -54,6 +54,7 @@ class ValetudoClient(QObject):
     toggleReceived = pyqtSignal(str, bool)     # capability name, enabled
     mapPeeked = pyqtSignal(dict)               # map read for the panel only (no layers)
     restrictionsReceived = pyqtSignal(dict)    # no-go zones and virtual walls
+    segmentsReceived = pyqtSignal(list)        # rooms: [{"id": "16", "name": "Kitchen"}, …]
     commandDone = pyqtSignal(str)
     reachable = pyqtSignal(bool)              # emitted after every request
     error = pyqtSignal(str)
@@ -182,6 +183,10 @@ class ValetudoClient(QObject):
         if hasattr(req, "setTransferTimeout"):
             req.setTransferTimeout(timeout_ms)
         self._track(self.nam.get(req), on_success, quiet=True, on_error=on_error, raw=raw)
+
+    def fetch_segments(self, quiet=True):
+        self._get("/robot/capabilities/MapSegmentationCapability",
+                  lambda d: self.segmentsReceived.emit(self._as_list(d)), quiet=quiet)
 
     def fetch_restrictions(self):
         self._get("/robot/capabilities/CombinedVirtualRestrictionsCapability",

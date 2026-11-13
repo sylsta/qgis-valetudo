@@ -7,9 +7,11 @@ enabled/checked state can never disagree.
 
 from qgis.PyQt.QtCore import Qt, QTimer, QUrl
 from qgis.PyQt.QtWidgets import QAction, QCheckBox, QMessageBox, QPushButton
+from qgis.PyQt.QtGui import QColor
 from qgis.core import (
-    Qgis, QgsCoordinateReferenceSystem, QgsMessageLog, QgsProject, QgsSettings,
+    Qgis, QgsCoordinateReferenceSystem, QgsGeometry, QgsMessageLog, QgsProject, QgsSettings,
 )
+from qgis.gui import QgsRubberBand
 
 from .boot_monitor import BootMonitor
 from .client import ValetudoClient
@@ -64,8 +66,7 @@ DOCK_ROW = ["locate", "empty_dock", "mop_wash", "mop_dry"]   # menu and panel li
 # Layout, None = separator. The panel shows the robot and map rows.
 ROBOT_ROW = ["start", "pause", "stop", "home"]
 MAP_ROW = ["show_map", "live", None, "clean_rooms", "zone", "goto"]
-TOOLBAR = ["show_map", "live", None] + ROBOT_ROW + [None, "clean_rooms", "zone", "goto",
-                                                    None, "status_panel"]
+TOOLBAR = ["status_panel", "show_map", "live"]   # everything else lives in the panel
 MENU = (["settings", "status_panel"] + MAP_ROW + [None] + RESTRICTIONS_ROW + [None] + ROBOT_ROW
         + [None] + DOCK_ROW + [None, "watch_boot", "reboot"])
 PANEL_SYSTEM_ROW = ["watch_boot", "reboot"]   # menu and panel command list, not the toolbar
@@ -138,7 +139,8 @@ class ValetudoPlugin:
         for key in ROBOT_ROW:
             self._new_action(key, labels[key], lambda *_, k=key: self.control(k))
         self._new_action("clean_rooms", tr("Clean selected rooms"), self.clean_selected)
-        self._new_action("zone", labels["zone"], self.activate_zone_tool, checkable=True)
+        self._new_action("zone", tr("Draw a zone on the map"), self.activate_zone_tool,
+                         checkable=True)
         self._new_action("goto", tr("Go here"), self.activate_goto_tool, checkable=True)
         dock_labels = {"locate": tr("Locate robot (beep)"), "empty_dock": tr("Empty dust bin"),
                        "mop_wash": tr("Wash mops"), "mop_dry": tr("Dry mops")}
@@ -178,13 +180,8 @@ class ValetudoPlugin:
             if key is not None:
                 self.iface.addPluginToMenu(self.menu, self.act[key])
         # Frequent commands as icon buttons; the others in the panel's "More" menu.
-        self.panel.set_actions(
-            [[self.act[k] for k in ROBOT_ROW],
-             [self.act[k] for k in ("show_map", "live")],
-             [self.act[k] for k in ("clean_rooms", "zone", "goto")]],
-            [[self.act[k] for k in RESTRICTIONS_ROW],
-             [self.act[k] for k in DOCK_ROW],
-             [self.act[k] for k in PANEL_SYSTEM_ROW]])
+        self.panel.bind_actions(self.act)
+        self.panel.zoneCleared.connect(self._hide_pending_zone)
 
         canvas = self.iface.mapCanvas()
         self.zone_tool = ZoneMapTool(canvas)
@@ -205,6 +202,7 @@ class ValetudoPlugin:
 
     def unload(self):
         self._hide_edit_bar()
+        self._hide_pending_zone()
         if getattr(self, "boot", None) is not None:
             self.boot.stop()
         if getattr(self, "goto_emulator", None) is not None:
@@ -517,13 +515,32 @@ class ValetudoPlugin:
                             tr("Click on the map to send the robot there."))
 
     def _on_zone(self, rect):
-        self.iface.actionPan().trigger()  # one zone per activation: no accidental resend
+        """A zone was drawn: keep it on the map and let the panel's Clean button send it."""
+        self.iface.actionPan().trigger()  # one zone per activation
         if rect.width() < MIN_ZONE_SIZE_CM or rect.height() < MIN_ZONE_SIZE_CM:
             self._message(tr("Zone too small."), Qgis.MessageLevel.Warning)
             return
-        client = self._get_client()
-        if client:
-            client.clean_zone_qgis(rect)
+        self._show_pending_zone(rect)
+        self.panel.set_pending_zone(rect)
+        self.panel.show()
+        self.panel.raise_()
+        self._message(tr("Zone ready: click “Clean the zone” in the panel."),
+                      Qgis.MessageLevel.Info)
+
+    def _show_pending_zone(self, rect):
+        self._hide_pending_zone()
+        band = QgsRubberBand(self.iface.mapCanvas(), Qgis.GeometryType.Polygon)
+        band.setFillColor(QColor(31, 120, 180, 60))
+        band.setStrokeColor(QColor(31, 120, 180))
+        band.setWidth(2)
+        band.setToGeometry(QgsGeometry.fromRect(rect), None)
+        self._pending_band = band
+
+    def _hide_pending_zone(self):
+        band, self._pending_band = getattr(self, "_pending_band", None), None
+        if band is not None:
+            band.reset(Qgis.GeometryType.Polygon)
+            self.iface.mapCanvas().scene().removeItem(band)
 
     def _on_goto(self, point):
         self.iface.actionPan().trigger()

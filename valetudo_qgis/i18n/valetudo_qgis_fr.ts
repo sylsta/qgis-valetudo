@@ -364,16 +364,8 @@
         <translation>{area} m²</translation>
     </message>
     <message>
-        <source>Valetudo status</source>
-        <translation>État Valetudo</translation>
-    </message>
-    <message>
         <source>Refresh now</source>
         <translation>Actualiser maintenant</translation>
-    </message>
-    <message>
-        <source>Status</source>
-        <translation>État</translation>
     </message>
     <message>
         <source>State</source>
@@ -382,26 +374,6 @@
     <message>
         <source>Battery</source>
         <translation>Batterie</translation>
-    </message>
-    <message>
-        <source>Settings</source>
-        <translation>Réglages</translation>
-    </message>
-    <message>
-        <source>Current or last cleaning</source>
-        <translation>Nettoyage en cours ou dernier</translation>
-    </message>
-    <message>
-        <source>Duration</source>
-        <translation>Durée</translation>
-    </message>
-    <message>
-        <source>Area</source>
-        <translation>Surface</translation>
-    </message>
-    <message>
-        <source>Totals</source>
-        <translation>Totaux</translation>
     </message>
     <message>
         <source>Cleanings</source>
@@ -804,10 +776,6 @@ Un nettoyage en cours sera interrompu. Le robot sera injoignable pendant une ou 
         <translation>Entretien</translation>
     </message>
     <message>
-        <source>Info</source>
-        <translation>Infos</translation>
-    </message>
-    <message>
         <source>Locate robot (beep)</source>
         <translation>Localiser le robot (bip)</translation>
     </message>
@@ -934,10 +902,6 @@ Ils remplacent toutes les restrictions actuellement sur le robot.</translation>
         <translation>Fin du journal de Valetudo :</translation>
     </message>
     <message>
-        <source>More</source>
-        <translation>Plus</translation>
-    </message>
-    <message>
         <source>Test connection</source>
         <translation>Tester la connexion</translation>
     </message>
@@ -1016,6 +980,90 @@ Continuer ?</translation>
     <message>
         <source>The robot did not reach the point within {minutes} min.</source>
         <translation>Le robot n'a pas atteint le point en {minutes} min.</translation>
+    </message>
+    <message>
+        <source>Draw a zone on the map</source>
+        <translation>Tracer une zone sur la carte</translation>
+    </message>
+    <message>
+        <source>Zone ready: click “Clean the zone” in the panel.</source>
+        <translation>Zone prête : cliquez sur « Nettoyer la zone » dans le panneau.</translation>
+    </message>
+    <message>
+        <source>Valetudo</source>
+        <translation>Valetudo</translation>
+    </message>
+    <message>
+        <source>Clean</source>
+        <translation>Nettoyer</translation>
+    </message>
+    <message>
+        <source>Clear</source>
+        <translation>Effacer</translation>
+    </message>
+    <message>
+        <source>Passes</source>
+        <translation>Passages</translation>
+    </message>
+    <message>
+        <source>Map</source>
+        <translation>Carte</translation>
+    </message>
+    <message>
+        <source>Last cleaning</source>
+        <translation>Dernier nettoyage</translation>
+    </message>
+    <message>
+        <source>Total time</source>
+        <translation>Durée totale</translation>
+    </message>
+    <message>
+        <source>Total area</source>
+        <translation>Surface totale</translation>
+    </message>
+    <message>
+        <source>Advanced</source>
+        <translation>Avancé</translation>
+    </message>
+    <message>
+        <source>Whole home</source>
+        <translation>Tout le logement</translation>
+    </message>
+    <message>
+        <source>Draw the zone on the map, then click Clean.</source>
+        <translation>Tracez la zone sur la carte, puis cliquez sur Nettoyer.</translation>
+    </message>
+    <message>
+        <source>The room list appears once the robot is connected.</source>
+        <translation>La liste des pièces s'affiche une fois le robot connecté.</translation>
+    </message>
+    <message>
+        <source>No rooms on the map yet.</source>
+        <translation>Aucune pièce sur la carte pour l'instant.</translation>
+    </message>
+    <message>
+        <source>Zone ready: {w} × {h} m</source>
+        <translation>Zone prête : {w} × {h} m</translation>
+    </message>
+    <message>
+        <source>Clean the whole home</source>
+        <translation>Nettoyer tout le logement</translation>
+    </message>
+    <message>
+        <source>Select at least one room</source>
+        <translation>Sélectionnez au moins une pièce</translation>
+    </message>
+    <message>
+        <source>Clean the zone</source>
+        <translation>Nettoyer la zone</translation>
+    </message>
+    <message>
+        <source>Draw a zone first</source>
+        <translation>Tracez d'abord une zone</translation>
+    </message>
+    <message>
+        <source>Clean {n} room(s)</source>
+        <translation>Nettoyer {n} pièce(s)</translation>
     </message>
 </context>
 </TS>

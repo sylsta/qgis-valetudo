@@ -27,40 +27,35 @@ without restarting QGIS.
 
 ## Usage
 
-1. *Plugins > Valetudo > Settings…*: enter the robot address (e.g. `http://192.168.1.23`).
-2. **Show map**: creates the "Valetudo" layer group and switches the project to "No CRS".
-3. **Live tracking**: refreshes the robot position and its path.
-4. Select rooms in the "Valetudo - map" layer (rooms are labelled with their
-   Valetudo names), then **Clean selected rooms**.
-5. **Clean zone**: drag a rectangle on the map; the robot cleans that zone.
-6. **Go here**: click on the map; the robot drives to that spot. Robots without
-   Valetudo's go-to (e.g. Eureka J15 Pro Ultra) get an emulation: the plugin sends
-   a 60 cm zone clean at that spot and pauses the robot as soon as it is within
-   50 cm (it vacuums, and mops if enabled, on its way; a first-time confirmation
-   says so).
+1. *Plugins > Valetudo > Settings…*: enter the robot address (e.g. `http://192.168.1.23`)
+   and click **Test connection**.
+2. Open the **Valetudo panel** (toolbar button or *Plugins > Valetudo*). Everything is
+   there, organised by task:
+   - **Top**: robot, connection, state badge, battery, and one red banner for any
+     problem (robot error, empty fresh water tank, full waste water tank…).
+   - **Clean**: choose **Whole home**, **Rooms** (tick them in the list) or **Zone**
+     (*Draw a zone on the map*, the zone stays visible), set passes, suction and
+     water, then click the single **Clean** button, whose text says what it will do.
+   - **Robot**: Pause, Stop, Dock, Go to… (click a point on the map), Locate, Camera.
+   - **Dock station**: fresh water, waste water, detergent and dust bag states, with
+     Empty bin, Wash mops and Dry mops next to them.
+   - Collapsible: **Camera** (live video, plays only while open; camera light),
+     **Map** (show map, live tracking, no-go zones, robot position), **Maintenance**
+     (consumables, statistics), **Advanced** (details, Wi-Fi, events, features, boot
+     log, reboot).
+3. The toolbar keeps three buttons: open the panel, show the map, live tracking.
 
-7. **Status panel**: a dockable panel. Always visible at the top: connection,
-   robot model, a coloured state badge, the battery, any robot error, and icon
-   buttons (Start, Pause, Stop, Return to dock · Show map, Live tracking · Clean
-   rooms, Clean zone, Go here) with a **More** menu for the rest (no-go zones,
-   dock commands, boot log, reboot).
-   Below, four tabs (the last one used is remembered):
-   - **Robot**: state details, dock station (fresh and waste water tanks,
-     detergent, dust bag), fan speed and water usage (editable), attachments,
-     position (read by the panel itself, no need to show the map);
-   - **Camera**: live video, plays only while this tab is shown;
-   - **Maintenance**: consumables, current and total statistics;
-   - **Info**: Wi-Fi, recent events, supported features.
-   It refreshes itself while visible (every 5 s while the robot works, every
-   30 s otherwise), even when the robot is docked. Sections fold with their
-   arrow (remembered).
+The panel refreshes itself while visible (every 5 s while the robot works, every
+30 s otherwise), even when the robot is docked. Actions the robot does not support
+are greyed out or hidden.
 
-8. **Camera**: the Camera tab of the status panel shows the robot's live video,
-   for robots that expose a raw H.264 stream over TCP (default
-   `tcp://<robot>:8555`). It needs **ffmpeg** (found in the `PATH`, or set its
-   path in the settings). The stream reconnects by itself if it drops, **Save
-   snapshot** saves the current image as PNG, and robots with a camera light get
-   a "Camera light" switch.
+**Go to… on robots without go-to** (e.g. Eureka J15 Pro Ultra): the plugin sends a
+60 cm zone clean at that spot and pauses the robot as soon as it is within 50 cm (it
+vacuums, and mops if enabled, on its way; a first-time confirmation says so).
+
+**Camera**: robots that expose a raw H.264 stream over TCP (default
+`tcp://<robot>:8555`). Needs **ffmpeg** (in the `PATH`, or set its path in the
+settings). The stream reconnects by itself; **Save snapshot** saves a PNG.
 
 **No-go zones and virtual walls**: *Edit no-go zones and walls* loads the
 robot's restrictions into two editable layers ("no-go zones" polygons, with a

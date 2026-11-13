@@ -12,8 +12,10 @@ from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsExpression,
     QgsFeature,
+    QgsFillSymbol,
     QgsField,
     QgsGeometry,
+    QgsLineSymbol,
     QgsMarkerSymbol,
     QgsPalLayerSettings,
     QgsProperty,
@@ -72,6 +74,62 @@ def _points_renderer():
     return QgsCategorizedSymbolRenderer("type", categories)
 
 
+# Soft colours, one per room (cycled), readable under black labels.
+ROOM_COLORS = ["#a6cee3", "#b2df8a", "#fdbf6f", "#cab2d6", "#fb9a99", "#ffff99",
+               "#8dd3c7", "#bebada", "#fccde5", "#ccebc5", "#ffed6f", "#d9d9d9"]
+FLOOR_COLOR = "#eeeeee"
+WALL_COLOR = "#455a64"
+
+
+def _fill(color, outline="transparent", width=0.0, style="solid"):
+    return QgsFillSymbol.createSimple({
+        "color": color, "outline_color": outline, "outline_width": str(width),
+        "style": style})
+
+
+def _line(color, width, style="solid"):
+    return QgsLineSymbol.createSimple({
+        "line_color": color, "line_width": str(width), "line_style": style,
+        "capstyle": "round", "joinstyle": "round"})
+
+
+def _rooms_renderer(segment_ids):
+    """Walls dark, floor light grey, each room its own soft colour."""
+    cats = [QgsRendererCategory("wall", _fill(WALL_COLOR), tr("Walls")),
+            QgsRendererCategory("floor", _fill(FLOOR_COLOR), tr("Floor"))]
+    def key(seg_id):
+        return (0, int(seg_id)) if str(seg_id).isdigit() else (1, str(seg_id))
+    for i, seg_id in enumerate(sorted(segment_ids, key=key)):
+        cats.append(QgsRendererCategory(
+            f"segment:{seg_id}", _fill(ROOM_COLORS[i % len(ROOM_COLORS)], "#ffffff", 0.3),
+            f"{tr('Room')} {seg_id}"))
+    renderer = QgsCategorizedSymbolRenderer(
+        "CASE WHEN \"type\" = 'segment' THEN 'segment:' || \"segment_id\" ELSE \"type\" END",
+        cats)
+    return renderer
+
+
+def _lines_renderer():
+    """Path thin and translucent, planned path dashed, virtual walls thick red."""
+    return QgsCategorizedSymbolRenderer("type", [
+        QgsRendererCategory("path", _line("30,136,229,170", 0.35), tr("Path")),
+        QgsRendererCategory("predicted_path", _line("30,136,229,200", 0.35, "dash"),
+                            tr("Planned path")),
+        QgsRendererCategory("virtual_wall", _line("#c62828", 1.0), tr("Virtual wall")),
+    ])
+
+
+def _areas_renderer():
+    return QgsCategorizedSymbolRenderer("type", [
+        QgsRendererCategory("no_go_area", _fill("198,40,40,60", "#c62828", 0.5, "b_diagonal"),
+                            tr("No-go")),
+        QgsRendererCategory("no_mop_area", _fill("21,101,192,60", "#1565c0", 0.5, "b_diagonal"),
+                            tr("No-mop")),
+        QgsRendererCategory("active_zone", _fill("67,160,71,50", "#2e7d32", 0.6),
+                            tr("Zone being cleaned")),
+    ])
+
+
 def _room_labeling():
     """Label each room with its Valetudo name, or "Room <id>" when it has none."""
     fallback = QgsExpression.quotedString(tr("Room"))
@@ -83,13 +141,18 @@ def _room_labeling():
     )
     buffer = QgsTextBufferSettings()
     buffer.setEnabled(True)
-    buffer.setSize(1)
+    buffer.setSize(0.8)
     buffer.setColor(QColor("white"))
+    buffer.setOpacity(0.8)
     fmt = QgsTextFormat()
-    fmt.setSize(10)
-    fmt.setColor(QColor("black"))
+    fmt.setSize(9)
+    fmt.setColor(QColor("#212121"))
+    font = fmt.font()
+    font.setBold(True)
+    fmt.setFont(font)
     fmt.setBuffer(buffer)
     settings.setFormat(fmt)
+    settings.centroidInside = True    # label inside the room, even for odd shapes
     return QgsVectorLayerSimpleLabeling(settings)
 
 
@@ -193,7 +256,9 @@ class ValetudoLayers:
         layers["robot"].setRenderer(_points_renderer())
         layers["rooms"].setLabeling(_room_labeling())
         layers["rooms"].setLabelsEnabled(True)
-        layers["rooms"].renderer().symbol().setOpacity(0.6)
+        layers["rooms"].setRenderer(_rooms_renderer([]))
+        layers["lines"].setRenderer(_lines_renderer())
+        layers["areas"].setRenderer(_areas_renderer())
 
         self._ids = {role: lyr.id() for role, lyr in layers.items()}
         self._signature = None
@@ -239,6 +304,9 @@ class ValetudoLayers:
                     meta.get("name"),
                 ]))
         _replace_features(rooms, feats)
+        segment_ids = {f["segment_id"] for f in feats if f["segment_id"]}
+        rooms.setRenderer(_rooms_renderer(segment_ids))   # one colour per room
+        rooms.triggerRepaint()
 
     def _update_entities(self, map_json):
         areas, lines, robot = self.layer("areas"), self.layer("lines"), self.layer("robot")

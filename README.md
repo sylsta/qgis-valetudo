@@ -56,6 +56,12 @@ The panel, from top to bottom:
   - **Maintenance**: consumables, current and total statistics;
   - **Info**: Wi-Fi, recent events, supported features, boot log.
 
+**Map style**: each room gets its own soft colour and a bold label with its name,
+walls are dark, the floor light grey; the robot's path is a thin translucent blue
+line (planned path dashed), virtual walls thick red, no-go / no-mop zones hatched
+red / blue. **Follow the robot** (Map group of the command list) keeps the robot
+in view during live tracking, recentring only when it nears the edge of the view.
+
 The panel refreshes itself while visible (every 5 s while the robot works, every
 30 s otherwise), even when the robot is docked. Sections fold with their arrow
 (remembered).

@@ -13,6 +13,7 @@ from qgis.core import (
 
 from .boot_monitor import BootMonitor
 from .client import ValetudoClient
+from .coords import v2q
 from .goto_emulation import ZONE_SIZE_CM as GOTO_ZONE_SIZE_CM, GoToEmulator
 from .i18n import install_translator, remove_translator, tr
 from .icons import has_icon, icon
@@ -84,6 +85,7 @@ def command_hints():
         "locate": tr("The robot beeps, to find it."),
         "show_map": tr("Load the robot's map into QGIS."),
         "live": tr("Refresh the robot position on the map every few seconds."),
+        "follow": tr("Keep the robot in view on the map (turns on live tracking)."),
         "edit_restrictions": tr("Load no-go zones and walls as layers you can edit."),
         "send_restrictions": tr("Send the edited no-go zones and walls to the robot."),
         "empty_dock": tr("Empty the robot's dust bin into the dock."),
@@ -123,6 +125,7 @@ class ValetudoPlugin:
         self.menu = tr("&Valetudo")
         self.act = {}            # key -> QAction
         self._unloaded = False   # set by unload(): late signals and timers do nothing
+        self._last_map = None    # last map received, for "Follow the robot"
         self.toolbar = None
         self.client = None
         self.capabilities = None  # None = unknown (no robot contacted yet)
@@ -159,6 +162,7 @@ class ValetudoPlugin:
         self._new_action("settings", tr("Settings…"), self.configure)
         self._new_action("show_map", tr("Show map"), self.show_map)
         self._new_action("live", tr("Live tracking"), self.toggle_live, checkable=True)
+        self._new_action("follow", tr("Follow the robot"), self.toggle_follow, checkable=True)
         for key in ROBOT_ROW:
             self._new_action(key, labels[key], lambda *_, k=key: self.control(k))
         self._new_action("clean_rooms", tr("Clean selected rooms"), self.clean_selected)
@@ -209,7 +213,8 @@ class ValetudoPlugin:
         groups = [
             (tr("Cleaning"), ["start", "clean_rooms", "zone", "goto"]),
             (tr("Robot"), ["pause", "stop", "home", "locate"]),
-            (tr("Map"), ["show_map", "live", "edit_restrictions", "send_restrictions"]),
+            (tr("Map"), ["show_map", "live", "follow", "edit_restrictions",
+                         "send_restrictions"]),
             (tr("Dock station"), ["empty_dock", "mop_wash", "mop_dry"]),
             (tr("System"), ["watch_boot", "reboot", "settings"]),
         ]
@@ -411,7 +416,35 @@ class ValetudoPlugin:
         if client:
             client.fetch_map()
 
+    def toggle_follow(self, checked):
+        """Follow needs live positions: turn live tracking on with it."""
+        if checked and not self.act["live"].isChecked():
+            self.act["live"].trigger()
+            if not self.act["live"].isChecked():   # no robot configured
+                self.act["follow"].setChecked(False)
+                return
+        if checked:
+            self._center_on_robot(self._last_map, force=True)
+
+    def _center_on_robot(self, map_json, force=False):
+        """Recentre on the robot when it leaves the middle of the view (no constant jitter)."""
+        if not map_json:
+            return
+        for ent in map_json.get("entities", []):
+            pts = ent.get("points") or []
+            if ent.get("type") == "robot_position" and len(pts) >= 2:
+                point = v2q(pts[0], pts[1])
+                canvas = self.iface.mapCanvas()
+                inner = canvas.extent().buffered(-0.2 * min(canvas.extent().width(),
+                                                            canvas.extent().height()))
+                if force or not inner.contains(point):
+                    canvas.setCenter(point)
+                    canvas.refresh()
+                return
+
     def toggle_live(self, checked):
+        if not checked and "follow" in self.act:
+            self.act["follow"].setChecked(False)   # nothing to follow without live positions
         client = self._get_client()
         if not client:
             self.act["live"].setChecked(False)
@@ -724,6 +757,7 @@ class ValetudoPlugin:
     # ------------------------------------------------------------------
 
     def _on_map(self, map_json):
+        self._last_map = map_json
         self.panel.update_map(map_json)
         if not self.layers.exists():
             self._prepare_project()
@@ -731,6 +765,8 @@ class ValetudoPlugin:
             canvas = self.iface.mapCanvas()
             canvas.setExtent(self.layers.layer("rooms").extent())
             canvas.refresh()
+        if self.act.get("follow") is not None and self.act["follow"].isChecked():
+            self._center_on_robot(map_json)
 
     def _prepare_project(self):
         """Switch the project to "No CRS": we work in the robot's own frame."""

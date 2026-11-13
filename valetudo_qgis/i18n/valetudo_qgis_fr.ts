@@ -1097,5 +1097,37 @@ Continuer ?</translation>
         <source>Tick rooms in the Robot tab, or select them in the “{layer}” layer.</source>
         <translation>Cochez des pièces dans l'onglet Robot, ou sélectionnez-les dans la couche « {layer} ».</translation>
     </message>
+    <message>
+        <source>Follow the robot</source>
+        <translation>Suivre le robot</translation>
+    </message>
+    <message>
+        <source>Keep the robot in view on the map (turns on live tracking).</source>
+        <translation>Garde le robot visible sur la carte (active le suivi en direct).</translation>
+    </message>
+    <message>
+        <source>Walls</source>
+        <translation>Murs</translation>
+    </message>
+    <message>
+        <source>Floor</source>
+        <translation>Sol</translation>
+    </message>
+    <message>
+        <source>Path</source>
+        <translation>Trajet</translation>
+    </message>
+    <message>
+        <source>Planned path</source>
+        <translation>Trajet prévu</translation>
+    </message>
+    <message>
+        <source>Virtual wall</source>
+        <translation>Mur virtuel</translation>
+    </message>
+    <message>
+        <source>Zone being cleaned</source>
+        <translation>Zone en cours de nettoyage</translation>
+    </message>
 </context>
 </TS>

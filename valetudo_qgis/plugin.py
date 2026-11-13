@@ -6,12 +6,13 @@ enabled/checked state can never disagree.
 """
 
 from qgis.PyQt.QtCore import Qt, QTimer, QUrl
-from qgis.PyQt.QtWidgets import QAction, QMessageBox
+from qgis.PyQt.QtWidgets import QAction, QMessageBox, QPushButton
 from qgis.core import Qgis, QgsCoordinateReferenceSystem, QgsMessageLog, QgsProject
 
 from .boot_monitor import BootMonitor
 from .client import ValetudoClient
 from .i18n import install_translator, remove_translator, tr
+from .icons import has_icon, icon
 from .map_layers import ValetudoLayers, layer_names
 from .map_tools import GoToMapTool, ZoneMapTool
 from .restrictions import RestrictionLayers, layer_names as restriction_layer_names
@@ -94,6 +95,8 @@ class ValetudoPlugin:
         self._reachable = None
         self.layers = ValetudoLayers(QgsProject.instance())
         self.restrictions = RestrictionLayers(QgsProject.instance())
+        self._edit_bar = None           # message bar shown while restrictions are edited
+        self._reload_quietly = False    # next restrictions reload: no editing, no bar
         self.zone_tool = self.goto_tool = None
         self.panel = None
         self._dock_state = {}  # dock component -> last known value
@@ -106,6 +109,9 @@ class ValetudoPlugin:
 
     def _new_action(self, key, text, slot=None, checkable=False):
         action = QAction(text, self.iface.mainWindow())
+        if has_icon(key):
+            action.setIcon(icon(key))
+        action.setToolTip(text)
         action.setCheckable(checkable)
         if slot is not None:
             action.triggered.connect(slot)
@@ -147,6 +153,7 @@ class ValetudoPlugin:
         self.panel.hide()
         self.act["status_panel"] = self.panel.toggleViewAction()
         self.act["status_panel"].setText(tr("Status panel"))
+        self.act["status_panel"].setIcon(icon("status_panel"))
 
         self.toolbar = self.iface.addToolBar("Valetudo")
         self.toolbar.setObjectName("ValetudoToolbar")
@@ -158,10 +165,14 @@ class ValetudoPlugin:
         for key in MENU:
             if key is not None:
                 self.iface.addPluginToMenu(self.menu, self.act[key])
-        # Reboot asks for confirmation, so it can safely sit in the same list.
+        # Frequent commands as icon buttons; the others in the panel's "More" menu.
         self.panel.set_actions(
-            [self.act[k] for k in ROBOT_ROW + MAP_ROW + RESTRICTIONS_ROW + DOCK_ROW
-             + PANEL_SYSTEM_ROW if k])
+            [[self.act[k] for k in ROBOT_ROW],
+             [self.act[k] for k in ("show_map", "live")],
+             [self.act[k] for k in ("clean_rooms", "zone", "goto")]],
+            [[self.act[k] for k in RESTRICTIONS_ROW],
+             [self.act[k] for k in DOCK_ROW],
+             [self.act[k] for k in PANEL_SYSTEM_ROW]])
 
         canvas = self.iface.mapCanvas()
         self.zone_tool = ZoneMapTool(canvas)
@@ -181,6 +192,7 @@ class ValetudoPlugin:
         QTimer.singleShot(0, self._watch_tick)
 
     def unload(self):
+        self._hide_edit_bar()
         if getattr(self, "boot", None) is not None:
             self.boot.stop()
         if self._watch is not None:
@@ -365,15 +377,50 @@ class ValetudoPlugin:
         if not self.layers.exists():
             self._prepare_project()
         zones, _walls = self.restrictions.load(data)
+        if self._reload_quietly:   # after sending or discarding: just show the robot's state
+            self._reload_quietly = False
+            return
         zones.startEditing()
         self.iface.setActiveLayer(zones)
+        self._show_edit_bar()
+
+    def _show_edit_bar(self):
+        """Persistent bar while editing: what to do, Send to robot…, Discard changes."""
+        self._hide_edit_bar()
         names = restriction_layer_names()
-        self.iface.messageBar().pushMessage(
-            "Valetudo",
-            tr("Edit the “{zones}” and “{walls}” layers (polygons and lines), then use "
-               "“Send no-go zones and walls to robot…”.").format(
-                zones=names["zones"], walls=names["walls"]),
-            level=Qgis.MessageLevel.Info, duration=15)
+        bar = self.iface.messageBar()
+        item = bar.createMessage(
+            tr("No-go zones and walls"),
+            tr("Edit the “{zones}” (polygons) and “{walls}” (lines) layers.").format(
+                zones=names["zones"], walls=names["walls"]))
+        send = QPushButton(tr("Send to robot…"), item)
+        send.clicked.connect(self.send_restrictions)
+        discard = QPushButton(tr("Discard changes"), item)
+        discard.clicked.connect(self.discard_restrictions)
+        item.layout().addWidget(send)
+        item.layout().addWidget(discard)
+        bar.pushWidget(item, Qgis.MessageLevel.Info, 0)
+        self._edit_bar = item
+
+    def _hide_edit_bar(self):
+        if self._edit_bar is not None:
+            try:
+                self.iface.messageBar().popWidget(self._edit_bar)
+            except RuntimeError:   # already closed by the user
+                pass
+            self._edit_bar = None
+
+    def discard_restrictions(self, *_):
+        """Drop the edits and reload what the robot currently has."""
+        self._hide_edit_bar()
+        for role in ("zones", "walls"):
+            lyr = self.restrictions.layer(role)
+            if lyr is not None and lyr.isEditable():
+                lyr.rollBack()
+        client = self._get_client()
+        if client:
+            self._reload_quietly = True
+            client.fetch_restrictions()
 
     def send_restrictions(self, *_):
         if not self.restrictions.exists():
@@ -403,6 +450,8 @@ class ValetudoPlugin:
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No)
         if answer == QMessageBox.StandardButton.Yes:
+            self._hide_edit_bar()
+            self._reload_quietly = True   # the reload after sending shows, not edits
             client.set_restrictions(payload)
 
     def simple_command(self, key):

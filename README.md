@@ -36,9 +36,10 @@ without restarting QGIS.
 6. **Go here**: click on the map; the robot drives to that spot.
 
 7. **Status panel**: a dockable panel. Always visible at the top: connection,
-   robot model, a coloured state badge, the battery, any robot error, and the
-   command list (Start … Go here, Locate robot, Empty dust bin, Wash mops,
-   Dry mops, Reboot robot: pick one and click Run).
+   robot model, a coloured state badge, the battery, any robot error, and icon
+   buttons (Start, Pause, Stop, Return to dock · Show map, Live tracking · Clean
+   rooms, Clean zone, Go here) with a **More** menu for the rest (no-go zones,
+   dock commands, boot log, reboot).
    Below, four tabs (the last one used is remembered):
    - **Robot**: state details, dock station (fresh and waste water tanks,
      detergent, dust bag), fan speed and water usage (editable), attachments,
@@ -47,8 +48,8 @@ without restarting QGIS.
    - **Maintenance**: consumables, current and total statistics;
    - **Info**: Wi-Fi, recent events, supported features.
    It refreshes itself while visible (every 5 s while the robot works, every
-   30 s otherwise), even when the robot is docked. Sections fold by unticking
-   their title.
+   30 s otherwise), even when the robot is docked. Sections fold with their
+   arrow (remembered).
 
 8. **Camera**: the Camera tab of the status panel shows the robot's live video,
    for robots that expose a raw H.264 stream over TCP (default
@@ -60,9 +61,9 @@ without restarting QGIS.
 **No-go zones and virtual walls**: *Edit no-go zones and walls* loads the
 robot's restrictions into two editable layers ("no-go zones" polygons, with a
 No-go / No-mop type, and "virtual walls" lines), on top of the map. Edit them
-with the usual QGIS tools (add, move vertices, snapping, undo), then *Send no-go
-zones and walls to robot…*: after a confirmation, they replace the robot's
-restrictions. Valetudo needs 4 corners per zone and 2 points per wall: other
+with the usual QGIS tools (add, move vertices, snapping, undo); a bar at the top
+of the map offers *Send to robot…* (after a confirmation, they replace the
+robot's restrictions) and *Discard changes*. Valetudo needs 4 corners per zone and 2 points per wall: other
 shapes are converted (bounding rectangle, line ends) and the confirmation says
 so.
 

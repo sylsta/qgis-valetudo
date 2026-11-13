@@ -9,31 +9,29 @@ import math
 import re
 import time
 
-from qgis.PyQt.QtCore import QDateTime, Qt, QTimer, pyqtSignal
+from qgis.PyQt.QtCore import QDateTime, QSize, Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFormLayout,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QListWidget,
+    QMenu,
     QPlainTextEdit,
     QProgressBar,
-    QPushButton,
-    QGridLayout,
     QScrollArea,
-    QSizePolicy,
     QTabWidget,
     QToolButton,
     QVBoxLayout,
     QWidget,
 )
 from qgis.core import QgsApplication, QgsSettings
-from qgis.gui import QgsDockWidget
+from qgis.gui import QgsCollapsibleGroupBox, QgsDockWidget
 
 from .camera_widget import CameraWidget
 from .i18n import tr
+from .icons import icon
 
 KEY_TAB = "valetudo/panel_tab"
 STATE_COLORS = {
@@ -289,25 +287,15 @@ class ValetudoPanel(QgsDockWidget):
     # -- UI construction -------------------------------------------------------
 
     def _section(self, title, key, open_default=True):
-        """A section that folds when its box is unticked; the choice is remembered."""
-        box = QGroupBox(title)
-        box.setCheckable(True)
+        """A native QGIS collapsible section; its open/closed state is remembered."""
+        box = QgsCollapsibleGroupBox(title)
+        box.setSaveCollapsedState(False)   # we store it ourselves, under our own key
         settings_key = f"valetudo/section_{key}"
-        is_open = QgsSettings().value(settings_key, open_default, type=bool)
-        box.setChecked(is_open)
-        content = QWidget()
-        outer = QVBoxLayout(box)
-        outer.addWidget(content)
-        form = QFormLayout(content)
-        form.setContentsMargins(0, 0, 0, 0)
+        box.setCollapsed(not QgsSettings().value(settings_key, open_default, type=bool))
+        box.collapsedStateChanged.connect(
+            lambda collapsed: QgsSettings().setValue(settings_key, not collapsed))
+        form = QFormLayout(box)
         form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
-        content.setVisible(is_open)
-
-        def toggled(checked):
-            QgsSettings().setValue(settings_key, checked)
-            content.setVisible(checked)
-
-        box.toggled.connect(toggled)
         self._layout.addWidget(box)
         return box, form
 
@@ -348,7 +336,9 @@ class ValetudoPanel(QgsDockWidget):
 
         self.lbl_robot = QLabel()
         self.lbl_robot.setWordWrap(True)
-        self.lbl_robot.setStyleSheet("color: palette(mid);")
+        font = self.lbl_robot.font()
+        font.setItalic(True)
+        self.lbl_robot.setFont(font)
         root_layout.addWidget(self.lbl_robot)
 
         summary = QHBoxLayout()
@@ -369,11 +359,11 @@ class ValetudoPanel(QgsDockWidget):
         self.lbl_error.setVisible(False)
         root_layout.addWidget(self.lbl_error)
 
-        # Commands: drop-down + Run, filled by set_actions() with the plugin's QActions.
-        self._actions_widget = QWidget()
-        self._actions_grid = QGridLayout(self._actions_widget)
-        self._actions_grid.setContentsMargins(0, 0, 0, 0)
-        root_layout.addWidget(self._actions_widget)
+        # Controls: icon buttons + "More" menu, filled by set_actions() with the plugin's
+        # own QActions (same enabled/checked state as the toolbar and the menu).
+        self._controls = QHBoxLayout()
+        self._controls.setSpacing(2)
+        root_layout.addLayout(self._controls)
 
         # -- Tabs ---------------------------------------------------------------------
         self.tabs = QTabWidget()
@@ -485,64 +475,45 @@ class ValetudoPanel(QgsDockWidget):
             QgsSettings().setValue(KEY_TAB, self._tab_keys[index])
         self._update_camera()
 
-    def set_actions(self, commands, buttons=()):
-        """Commands in a drop-down list with a Run button; `buttons` as full-width buttons.
+    def set_actions(self, groups, more_groups):
+        """Icon buttons for `groups` (lists of QActions), the rest in a "More" menu.
 
-        Everything uses the plugin's own QActions, so text, enabled and checked
-        state always match the toolbar and the menu.
+        None inside a list is a separator in the menu.
         """
-        grid = self._actions_grid
-        while grid.count():
-            item = grid.takeAt(0)
+        layout = self._controls
+        while layout.count():
+            item = layout.takeAt(0)
             if item.widget() is not None:
                 item.widget().deleteLater()
+        for g, group in enumerate(groups):
+            if g:
+                layout.addSpacing(8)
+            for action in group:
+                button = QToolButton()
+                button.setDefaultAction(action)
+                button.setAutoRaise(True)
+                button.setIconSize(QSize(22, 22))
+                layout.addWidget(button)
+        layout.addStretch(1)
 
-        self._commands = [a for a in commands if a is not None]
-        self.combo_commands = QComboBox()
-        for action in self._commands:
-            self.combo_commands.addItem(action.text())
-            action.changed.connect(self._sync_commands)   # enabled / checked / text
-        self.combo_commands.currentIndexChanged.connect(self._sync_run_button)
-        self.btn_run = QPushButton(tr("Run"))
-        self.btn_run.clicked.connect(self._run_command)
-        grid.addWidget(self.combo_commands, 0, 0)
-        grid.addWidget(self.btn_run, 0, 1)
-        grid.setColumnStretch(0, 1)
-
-        for row, action in enumerate((a for a in buttons if a is not None), start=1):
-            button = QToolButton()
-            button.setDefaultAction(action)
-            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
-            button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-            grid.addWidget(button, row, 0, 1, 2)
-        self._sync_commands()
-
-    def _current_command(self):
-        index = self.combo_commands.currentIndex()
-        return self._commands[index] if 0 <= index < len(self._commands) else None
-
-    def _sync_commands(self, *_):
-        """Mirror each action in the list: ✓ when switched on, greyed when unavailable."""
-        model = self.combo_commands.model()
-        for i, action in enumerate(self._commands):
-            text = action.text()
-            if action.isCheckable() and action.isChecked():
-                text += "  ✓"
-            self.combo_commands.setItemText(i, text)
-            item = model.item(i) if hasattr(model, "item") else None
-            if item is not None:
-                item.setEnabled(action.isEnabled())
-        self._sync_run_button()
-
-    def _sync_run_button(self, *_):
-        action = self._current_command()
-        self.btn_run.setEnabled(action is not None and action.isEnabled())
-        self.btn_run.setToolTip(action.toolTip() if action is not None else "")
-
-    def _run_command(self, *_):
-        action = self._current_command()
-        if action is not None and action.isEnabled():
-            action.trigger()   # same as clicking the toolbar button (toggles if checkable)
+        menu = QMenu(self)
+        for g, group in enumerate(more_groups):
+            if g:
+                menu.addSeparator()
+            for action in group:
+                if action is None:
+                    menu.addSeparator()
+                else:
+                    menu.addAction(action)
+        more = QToolButton()
+        more.setIcon(icon("more"))
+        more.setIconSize(QSize(22, 22))
+        more.setToolTip(tr("More"))
+        more.setAutoRaise(True)
+        more.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        more.setMenu(menu)
+        self._more_menu = menu   # keep a reference
+        layout.addWidget(more)
 
     # -- client wiring ---------------------------------------------------------
 

@@ -6,11 +6,13 @@ authentication manager (QgsAuthConfigSelect), which encrypts them.
 
 from qgis.PyQt.QtCore import QUrl
 from qgis.PyQt.QtWidgets import (
-    QCheckBox, QDialog, QDialogButtonBox, QFormLayout, QLineEdit, QSpinBox,
+    QCheckBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
+    QPushButton, QSpinBox, QTabWidget, QVBoxLayout, QWidget,
 )
 from qgis.core import QgsSettings
 from qgis.gui import QgsAuthConfigSelect
 
+from .client import ValetudoClient
 from .i18n import tr
 
 KEY_URL = "valetudo/url"
@@ -90,22 +92,77 @@ class SettingsDialog(QDialog):
         self.ssh_port.setRange(1, 65535)
         self.ssh_port.setValue(cfg["ssh_port"])
 
+        # Connection test: asks the robot who it is, with the values being edited.
+        self.btn_test = QPushButton(tr("Test connection"))
+        self.btn_test.clicked.connect(self._test_connection)
+        self.lbl_test = QLabel()
+        self.lbl_test.setWordWrap(True)
+        self._test_client = None
+
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
 
-        form = QFormLayout(self)
+        tabs = QTabWidget()
+        form = self._tab(tabs, tr("Connection"))
         form.addRow(tr("Robot address"), self.url)
         form.addRow(tr("Authentication (optional)"), self.auth)
         form.addRow(tr("Live tracking refresh"), self.interval)
+        test_row = QHBoxLayout()
+        test_row.addWidget(self.btn_test)
+        test_row.addWidget(self.lbl_test, 1)
+        form.addRow(test_row)
+
+        form = self._tab(tabs, tr("Camera"))
         form.addRow(tr("Camera stream URL"), self.camera_url)
         form.addRow(tr("ffmpeg path"), self.ffmpeg)
         form.addRow(tr("Video width"), self.camera_width)
-        form.addRow(tr("Dock station notifications"), self.notify_dock)
+
+        form = self._tab(tabs, tr("Notifications"))
+        form.addRow(self.notify_dock)
+
+        form = self._tab(tabs, tr("SSH"))
         form.addRow(tr("SSH user (reboot)"), self.ssh_user)
         form.addRow(tr("SSH port (reboot)"), self.ssh_port)
-        form.addRow(buttons)
+        hint = QLabel(tr("Used only by “Reboot robot (SSH)…”, with your SSH key "
+                         "(no password is stored)."))
+        hint.setWordWrap(True)
+        form.addRow(hint)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(tabs)
+        layout.addWidget(buttons)
+        self.resize(480, self.sizeHint().height())
+
+    @staticmethod
+    def _tab(tabs, title):
+        page = QWidget()
+        form = QFormLayout(page)
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        tabs.addTab(page, title)
+        return form
+
+    def _test_connection(self, *_):
+        url = self.url.text().strip()
+        if not url:
+            self.lbl_test.setText(tr("Enter the robot address first."))
+            return
+        self.btn_test.setEnabled(False)
+        self.lbl_test.setText(tr("Testing…"))
+        self._test_client = ValetudoClient(url, self.auth.configId(), self)
+
+        def ok(info):
+            robot = " ".join(p for p in ((info or {}).get("manufacturer"),
+                                         (info or {}).get("modelName")) if p) or "Valetudo"
+            self.lbl_test.setText("✓ " + tr("Connected: {robot}").format(robot=robot))
+            self.btn_test.setEnabled(True)
+
+        def failed(error):
+            self.lbl_test.setText("✗ " + tr("Connection failed: {error}").format(error=error))
+            self.btn_test.setEnabled(True)
+
+        self._test_client.probe("/robot", ok, failed, timeout_ms=5000)
 
     def accept(self):
         s = QgsSettings()

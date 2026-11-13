@@ -608,8 +608,8 @@
         <translation>Prévenir quand un réservoir de la station est vide, plein ou absent</translation>
     </message>
     <message>
-        <source>Dock station notifications</source>
-        <translation>Notifications de la station</translation>
+        <source>Notifications</source>
+        <translation>Notifications</translation>
     </message>
     <message>
         <source>Reboot robot (SSH)…</source>
@@ -800,10 +800,6 @@ Un nettoyage en cours sera interrompu. Le robot sera injoignable pendant une ou 
         <translation>En attente de la position du robot…</translation>
     </message>
     <message>
-        <source>Run</source>
-        <translation>Exécuter</translation>
-    </message>
-    <message>
         <source>Maintenance</source>
         <translation>Entretien</translation>
     </message>
@@ -854,10 +850,6 @@ Un nettoyage en cours sera interrompu. Le robot sera injoignable pendant une ou 
     <message>
         <source>Send no-go zones and walls</source>
         <translation>Envoi des zones interdites et des murs</translation>
-    </message>
-    <message>
-        <source>Edit the “{zones}” and “{walls}” layers (polygons and lines), then use “Send no-go zones and walls to robot…”.</source>
-        <translation>Modifiez les couches « {zones} » et « {walls} » (polygones et lignes), puis utilisez « Envoyer les zones interdites et les murs au robot… ».</translation>
     </message>
     <message>
         <source>Use “Edit no-go zones and walls” first.</source>
@@ -940,6 +932,58 @@ Ils remplacent toutes les restrictions actuellement sur le robot.</translation>
     <message>
         <source>End of Valetudo's log:</source>
         <translation>Fin du journal de Valetudo :</translation>
+    </message>
+    <message>
+        <source>More</source>
+        <translation>Plus</translation>
+    </message>
+    <message>
+        <source>Test connection</source>
+        <translation>Tester la connexion</translation>
+    </message>
+    <message>
+        <source>Connection</source>
+        <translation>Connexion</translation>
+    </message>
+    <message>
+        <source>SSH</source>
+        <translation>SSH</translation>
+    </message>
+    <message>
+        <source>Used only by “Reboot robot (SSH)…”, with your SSH key (no password is stored).</source>
+        <translation>Utilisé seulement par « Redémarrer le robot (SSH)… », avec votre clé SSH (aucun mot de passe n'est enregistré).</translation>
+    </message>
+    <message>
+        <source>Enter the robot address first.</source>
+        <translation>Saisissez d'abord l'adresse du robot.</translation>
+    </message>
+    <message>
+        <source>Testing…</source>
+        <translation>Test en cours…</translation>
+    </message>
+    <message>
+        <source>Connected: {robot}</source>
+        <translation>Connecté : {robot}</translation>
+    </message>
+    <message>
+        <source>Connection failed: {error}</source>
+        <translation>Échec de la connexion : {error}</translation>
+    </message>
+    <message>
+        <source>No-go zones and walls</source>
+        <translation>Zones interdites et murs</translation>
+    </message>
+    <message>
+        <source>Edit the “{zones}” (polygons) and “{walls}” (lines) layers.</source>
+        <translation>Modifiez les couches « {zones} » (polygones) et « {walls} » (lignes).</translation>
+    </message>
+    <message>
+        <source>Send to robot…</source>
+        <translation>Envoyer au robot…</translation>
+    </message>
+    <message>
+        <source>Discard changes</source>
+        <translation>Annuler les modifications</translation>
     </message>
 </context>
 </TS>

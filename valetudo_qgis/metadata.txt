@@ -16,6 +16,7 @@ repository=https://github.com/sylsta/qgis-valetudo
 tracker=https://github.com/sylsta/qgis-valetudo/issues
 license=GPL-2.0-or-later
 category=Plugins
+icon=icons/plugin.svg
 tags=valetudo,robot,vacuum,indoor
 experimental=True
 deprecated=False

@@ -220,12 +220,16 @@ class ValetudoLayers:
             pts = [v2q(c[i], c[i + 1]) for i in range(0, len(c) - 1, 2)]
             if not pts:
                 continue
-            if etype in POINT_ENTITIES or len(pts) == 1:
+            # Only genuine point entities go to the points layer. A path may hold a
+            # single point (e.g. right after a start): it is skipped, not shown as a point.
+            if etype in POINT_ENTITIES:
                 angle = (ent.get("metaData") or {}).get("angle")
                 point_f.append(_feature(robot, QgsGeometry.fromPointXY(pts[0]), [etype, angle]))
             elif etype in AREA_ENTITIES:
-                area_f.append(_feature(areas, QgsGeometry.fromPolygonXY([pts + [pts[0]]]), [etype]))
-            else:  # path, predicted_path, virtual_wall...
+                if len(pts) >= 3:
+                    area_f.append(_feature(
+                        areas, QgsGeometry.fromPolygonXY([pts + [pts[0]]]), [etype]))
+            elif len(pts) >= 2:  # path, predicted_path, virtual_wall...
                 line_f.append(_feature(lines, QgsGeometry.fromPolylineXY(pts), [etype]))
         # Features are drawn in insertion order: put the robot last, on top of its dock.
         point_f.sort(key=lambda f: f["type"] == "robot_position")

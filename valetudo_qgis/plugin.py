@@ -91,6 +91,7 @@ class ValetudoPlugin:
         self.translator = install_translator()  # before any tr() call
         self.menu = tr("&Valetudo")
         self.act = {}            # key -> QAction
+        self._unloaded = False   # set by unload(): late signals and timers do nothing
         self.toolbar = None
         self.client = None
         self.capabilities = None  # None = unknown (no robot contacted yet)
@@ -152,7 +153,7 @@ class ValetudoPlugin:
 
         # Panels: hidden by default; their toggle actions follow their visibility.
         self.panel = ValetudoPanel(win)
-        self.panel.clientRequested.connect(lambda: self._get_client(prompt=False))
+        self.panel.clientRequested.connect(self._on_panel_needs_client)
         self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.panel)
         self.panel.hide()
         self.act["status_panel"] = self.panel.toggleViewAction()
@@ -188,7 +189,17 @@ class ValetudoPlugin:
         self._watch.start()
         QTimer.singleShot(0, self._watch_tick)
 
+    def _on_panel_needs_client(self):
+        if not self._unloaded:
+            self._get_client(prompt=False)
+
     def unload(self):
+        self._unloaded = True   # before anything else: removing the panel emits signals
+        if self.panel is not None:
+            try:
+                self.panel.clientRequested.disconnect(self._on_panel_needs_client)
+            except (TypeError, RuntimeError):
+                pass
         self._hide_edit_bar()
         if getattr(self, "boot", None) is not None:
             self.boot.stop()
@@ -232,6 +243,8 @@ class ValetudoPlugin:
         prompt=False never opens the settings dialog (e.g. a panel restored at
         QGIS startup); it just returns None when no robot is configured.
         """
+        if self._unloaded:
+            return None
         if self.client:
             return self.client
         cfg = load_settings()
@@ -249,7 +262,8 @@ class ValetudoPlugin:
         self.client.capabilitiesReceived.connect(self._on_capabilities)
         self.client.restrictionsReceived.connect(self._on_restrictions)
         self.client.attributesReceived.connect(self._on_attributes)
-        self.panel.attach(self.client)
+        if self.panel is not None:
+            self.panel.attach(self.client)
         self.client.fetch_capabilities(quiet=True)   # retried once the robot answers
         return self.client
 
@@ -301,6 +315,8 @@ class ValetudoPlugin:
     # -- dock station watch -----------------------------------------------------
 
     def _watch_tick(self):
+        if self._unloaded:
+            return
         if not load_settings()["notify_dock"]:
             return
         client = self._get_client(prompt=False)

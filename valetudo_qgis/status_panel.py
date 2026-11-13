@@ -426,30 +426,64 @@ class ValetudoPanel(QgsDockWidget):
                     self.box_attachments, self.box_wifi, self.box_dock):
             box.setVisible(False)   # shown once the robot reports them
 
-    def set_actions(self, *groups, columns=2):
-        """Show groups of plugin QActions as buttons, `columns` per line.
+    def set_actions(self, commands, buttons=()):
+        """Commands in a drop-down list with a Run button; `buttons` as full-width buttons.
 
-        Each button uses the action itself (setDefaultAction), so its text,
-        enabled and checked state always match the toolbar and the menu.
-        A small gap separates the groups.
+        Everything uses the plugin's own QActions, so text, enabled and checked
+        state always match the toolbar and the menu.
         """
         grid = self._actions_grid
         while grid.count():
             item = grid.takeAt(0)
             if item.widget() is not None:
                 item.widget().deleteLater()
-        row = 0
-        for group in groups:
-            actions = [a for a in group if a is not None]
-            for i, action in enumerate(actions):
-                button = QToolButton()
-                button.setDefaultAction(action)
-                button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
-                button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-                grid.addWidget(button, row + i // columns, i % columns)
-            row += (len(actions) + columns - 1) // columns
-            grid.setRowMinimumHeight(row, 6)   # gap between groups
-            row += 1
+
+        self._commands = [a for a in commands if a is not None]
+        self.combo_commands = QComboBox()
+        for action in self._commands:
+            self.combo_commands.addItem(action.text())
+            action.changed.connect(self._sync_commands)   # enabled / checked / text
+        self.combo_commands.currentIndexChanged.connect(self._sync_run_button)
+        self.btn_run = QPushButton(tr("Run"))
+        self.btn_run.clicked.connect(self._run_command)
+        grid.addWidget(self.combo_commands, 0, 0)
+        grid.addWidget(self.btn_run, 0, 1)
+        grid.setColumnStretch(0, 1)
+
+        for row, action in enumerate((a for a in buttons if a is not None), start=1):
+            button = QToolButton()
+            button.setDefaultAction(action)
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+            button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            grid.addWidget(button, row, 0, 1, 2)
+        self._sync_commands()
+
+    def _current_command(self):
+        index = self.combo_commands.currentIndex()
+        return self._commands[index] if 0 <= index < len(self._commands) else None
+
+    def _sync_commands(self, *_):
+        """Mirror each action in the list: ✓ when switched on, greyed when unavailable."""
+        model = self.combo_commands.model()
+        for i, action in enumerate(self._commands):
+            text = action.text()
+            if action.isCheckable() and action.isChecked():
+                text += "  ✓"
+            self.combo_commands.setItemText(i, text)
+            item = model.item(i) if hasattr(model, "item") else None
+            if item is not None:
+                item.setEnabled(action.isEnabled())
+        self._sync_run_button()
+
+    def _sync_run_button(self, *_):
+        action = self._current_command()
+        self.btn_run.setEnabled(action is not None and action.isEnabled())
+        self.btn_run.setToolTip(action.toolTip() if action is not None else "")
+
+    def _run_command(self, *_):
+        action = self._current_command()
+        if action is not None and action.isEnabled():
+            action.trigger()   # same as clicking the toolbar button (toggles if checkable)
 
     # -- client wiring ---------------------------------------------------------
 

@@ -799,5 +799,9 @@ Un nettoyage en cours sera interrompu. Le robot sera injoignable pendant une ou 
         <source>Waiting for the robot position…</source>
         <translation>En attente de la position du robot…</translation>
     </message>
+    <message>
+        <source>Run</source>
+        <translation>Exécuter</translation>
+    </message>
 </context>
 </TS>

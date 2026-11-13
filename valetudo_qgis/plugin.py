@@ -125,9 +125,8 @@ class ValetudoPlugin:
         for key in MENU:
             if key is not None:
                 self.iface.addPluginToMenu(self.menu, self.act[key])
-        self.panel.set_actions([self.act[k] for k in ROBOT_ROW],
-                               [self.act[k] for k in MAP_ROW if k],
-                               [self.act[k] for k in PANEL_SYSTEM_ROW])
+        self.panel.set_actions([self.act[k] for k in ROBOT_ROW + MAP_ROW if k],
+                               buttons=[self.act[k] for k in PANEL_SYSTEM_ROW])
 
         canvas = self.iface.mapCanvas()
         self.zone_tool = ZoneMapTool(canvas)

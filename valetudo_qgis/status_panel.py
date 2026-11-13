@@ -17,8 +17,8 @@ from qgis.PyQt.QtWidgets import (
     QLabel,
     QListWidget,
     QProgressBar,
-    QPushButton,
     QScrollArea,
+    QToolBar,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -216,16 +216,14 @@ class ValetudoPanel(QgsDockWidget):
         self.lbl_robot.setWordWrap(True)
         self._layout.addWidget(self.lbl_robot)
 
-        # Controls
-        controls = QHBoxLayout()
-        self.control_buttons = []
-        for key, text in (("start", tr("Start")), ("pause", tr("Pause")),
-                          ("stop", tr("Stop")), ("home", tr("Return to dock"))):
-            btn = QPushButton(text)
-            btn.clicked.connect(lambda *_, k=key: self._control(k))
-            controls.addWidget(btn)
-            self.control_buttons.append(btn)
-        self._layout.addLayout(controls)
+        # Controls: filled by set_actions() with the plugin's own QActions, so the
+        # toolbar, the menu and the panel share one state (enabled, checked).
+        self._action_bars = []
+        for _ in range(2):
+            bar = QToolBar()
+            bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+            self._layout.addWidget(bar)
+            self._action_bars.append(bar)
 
         # Status
         self.box_status, form = self._section(tr("Status"))
@@ -307,15 +305,30 @@ class ValetudoPanel(QgsDockWidget):
                     self.box_attachments, self.box_wifi):
             box.setVisible(False)   # shown once the robot reports them
 
+    def set_actions(self, *rows):
+        """Show the given rows of plugin QActions as buttons (None = separator)."""
+        for bar, actions in zip(self._action_bars, rows):
+            bar.clear()
+            for action in actions:
+                if action is None:
+                    bar.addSeparator()
+                else:
+                    bar.addAction(action)
+
     # -- client wiring ---------------------------------------------------------
 
     def attach(self, client):
         """Called by the plugin whenever its client is created (or dropped: None)."""
         self.client = client
         self.capabilities = None
+        self._reachable = None
         if client is None:
             self._timer.stop()
             self._show_disconnected()
+            for box in (self.box_settings, self.box_current, self.box_total,
+                        self.box_consumables, self.box_attachments, self.box_wifi):
+                box.setVisible(False)
+            self.lbl_features.setText("—")
             return
         client.reachable.connect(self._on_reachable)
         client.robotInfoReceived.connect(self._on_robot_info)
@@ -364,10 +377,6 @@ class ValetudoPanel(QgsDockWidget):
             client.fetch_total_statistics(quiet=True)
         if "WifiConfigurationCapability" in caps:
             client.fetch_wifi(quiet=True)
-
-    def _control(self, action):
-        if self.client is not None:
-            self.client.basic_control(action)
 
     def _on_preset_chosen(self, capability, index):
         combo = self.preset_combos[capability]
@@ -418,8 +427,6 @@ class ValetudoPanel(QgsDockWidget):
     def _on_capabilities(self, capabilities):
         self.capabilities = set(capabilities)
         caps = self.capabilities
-        for btn in self.control_buttons:
-            btn.setEnabled("BasicControlCapability" in caps)
 
         any_preset = False
         for capability, combo in self.preset_combos.items():
@@ -438,8 +445,8 @@ class ValetudoPanel(QgsDockWidget):
         lines = [f"✓ {labels.get(c, c.replace('Capability', ''))}" for c in sorted(caps)]
         lines += [f"✗ {text}" for c, text in labels.items() if c not in caps]
         self.lbl_features.setText("\n".join(lines))
-        self.refresh()
-        if self.isVisible():
+        if self.isVisible():   # nothing is fetched while the panel is hidden
+            self.refresh()
             self._timer.start()
 
     def _on_presets(self, capability, presets):

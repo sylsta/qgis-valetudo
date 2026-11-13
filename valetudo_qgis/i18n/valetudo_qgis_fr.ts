@@ -551,5 +551,13 @@
         <source>Video width</source>
         <translation>Largeur de la vidéo</translation>
     </message>
+    <message>
+        <source>Robot reachable again.</source>
+        <translation>Robot de nouveau joignable.</translation>
+    </message>
+    <message>
+        <source>Robot unreachable.</source>
+        <translation>Robot injoignable.</translation>
+    </message>
 </context>
 </TS>

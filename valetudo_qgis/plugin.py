@@ -1,18 +1,41 @@
-"""Main plugin class: toolbar, menu, map tools, wiring between client and layers."""
+"""Main plugin class: actions, toolbar, menu, panels, map tools.
+
+Every command exists once, as a QAction in ``self.act``. The toolbar, the
+Valetudo menu and the status panel all show these same objects, so their
+enabled/checked state can never disagree.
+"""
 
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import QAction
 from qgis.core import Qgis, QgsCoordinateReferenceSystem, QgsProject
 
+from .camera_panel import CameraPanel
 from .client import ValetudoClient
 from .i18n import install_translator, remove_translator, tr
 from .map_layers import ValetudoLayers, layer_names
 from .map_tools import GoToMapTool, ZoneMapTool
 from .settings_dialog import SettingsDialog, load_settings
 from .status_panel import ValetudoPanel
-from .camera_panel import CameraPanel
 
 MIN_ZONE_SIZE_CM = 20  # smaller rectangles are treated as accidental clicks
+
+# Valetudo capability required by each action (absent: always available).
+REQUIRED_CAPABILITY = {
+    "start": "BasicControlCapability",
+    "pause": "BasicControlCapability",
+    "stop": "BasicControlCapability",
+    "home": "BasicControlCapability",
+    "clean_rooms": "MapSegmentationCapability",
+    "zone": "ZoneCleaningCapability",
+    "goto": "GoToLocationCapability",
+}
+
+# Layout, None = separator. The panel shows the robot and map rows.
+ROBOT_ROW = ["start", "pause", "stop", "home"]
+MAP_ROW = ["show_map", "live", None, "clean_rooms", "zone", "goto"]
+TOOLBAR = ["show_map", "live", None] + ROBOT_ROW + [None, "clean_rooms", "zone", "goto",
+                                                    None, "status_panel", "camera"]
+MENU = ["settings", "status_panel", "camera"] + MAP_ROW + ROBOT_ROW
 
 
 def command_labels():
@@ -35,80 +58,76 @@ class ValetudoPlugin:
         self.iface = iface
         self.translator = install_translator()  # before any tr() call
         self.menu = tr("&Valetudo")
-        self.actions = []
+        self.act = {}            # key -> QAction
         self.toolbar = None
         self.client = None
+        self.capabilities = None  # None = unknown (no robot contacted yet)
+        self._reachable = None
         self.layers = ValetudoLayers(QgsProject.instance())
-        self.zone_tool = None
-        self.goto_tool = None
-        self._capability_actions = {}  # Valetudo capability name -> [QAction]
-        self.panel = None
-        self.act_panel = None
-        self.camera_panel = None
-        self.act_camera = None
+        self.zone_tool = self.goto_tool = None
+        self.panel = self.camera_panel = None
 
     # ------------------------------------------------------------------
     # GUI setup / teardown
     # ------------------------------------------------------------------
 
+    def _new_action(self, key, text, slot=None, checkable=False):
+        action = QAction(text, self.iface.mainWindow())
+        action.setCheckable(checkable)
+        if slot is not None:
+            action.triggered.connect(slot)
+        self.act[key] = action
+        return action
+
     def initGui(self):
         labels = command_labels()
+        win = self.iface.mainWindow()
+
+        self._new_action("settings", tr("Settings…"), self.configure)
+        self._new_action("show_map", tr("Show map"), self.show_map)
+        self._new_action("live", tr("Live tracking"), self.toggle_live, checkable=True)
+        for key in ROBOT_ROW:
+            self._new_action(key, labels[key], lambda *_, k=key: self.control(k))
+        self._new_action("clean_rooms", tr("Clean selected rooms"), self.clean_selected)
+        self._new_action("zone", labels["zone"], self.activate_zone_tool, checkable=True)
+        self._new_action("goto", tr("Go here"), self.activate_goto_tool, checkable=True)
+
+        # Panels: hidden by default; their toggle actions follow their visibility.
+        self.panel = ValetudoPanel(win)
+        self.panel.clientRequested.connect(lambda: self._get_client(prompt=False))
+        self.camera_panel = CameraPanel(win)
+        self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.panel)
+        self.iface.addTabifiedDockWidget(Qt.DockWidgetArea.RightDockWidgetArea,
+                                         self.camera_panel, [self.panel.objectName()])
+        for dock in (self.panel, self.camera_panel):
+            dock.hide()
+        self.act["status_panel"] = self.panel.toggleViewAction()
+        self.act["status_panel"].setText(tr("Status panel"))
+        self.act["camera"] = self.camera_panel.toggleViewAction()
+        self.act["camera"].setText(tr("Camera"))
+
         self.toolbar = self.iface.addToolBar("Valetudo")
         self.toolbar.setObjectName("ValetudoToolbar")
-
-        self._add(tr("Settings…"), self.configure, toolbar=False)
-        self._add(tr("Show map"), self.show_map)
-
-        # Status panel, hidden by default; its toggle action stays in sync with it.
-        self.panel = ValetudoPanel(self.iface.mainWindow())
-        self.panel.clientRequested.connect(self._get_client)
-        self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.panel)
-        self.panel.hide()
-        self.act_panel = self.panel.toggleViewAction()
-        self.act_panel.setText(tr("Status panel"))
-        self.toolbar.addAction(self.act_panel)
-        self.iface.addPluginToMenu(self.menu, self.act_panel)
-
-        # Camera panel: video plays only while it is visible.
-        self.camera_panel = CameraPanel(self.iface.mainWindow())
-        self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.camera_panel)
-        self.camera_panel.hide()
-        self.act_camera = self.camera_panel.toggleViewAction()
-        self.act_camera.setText(tr("Camera"))
-        self.toolbar.addAction(self.act_camera)
-        self.iface.addPluginToMenu(self.menu, self.act_camera)
-        self.act_live = self._add(tr("Live tracking"), self.toggle_live, checkable=True)
-        self.toolbar.addSeparator()
-        for key in ("start", "pause", "stop", "home"):
-            self._add(labels[key], lambda *_, k=key: self.control(k),
-                      capability="BasicControlCapability")
-        self.toolbar.addSeparator()
-        self._add(tr("Clean selected rooms"), self.clean_selected,
-                  capability="MapSegmentationCapability")
-        self.act_zone = self._add(labels["zone"], self.activate_zone_tool, checkable=True,
-                                  capability="ZoneCleaningCapability")
-        self.act_goto = self._add(tr("Go here"), self.activate_goto_tool, checkable=True,
-                                  capability="GoToLocationCapability")
+        for key in TOOLBAR:
+            if key is None:
+                self.toolbar.addSeparator()
+            else:
+                self.toolbar.addAction(self.act[key])
+        for key in MENU:
+            if key is not None:
+                self.iface.addPluginToMenu(self.menu, self.act[key])
+        self.panel.set_actions([self.act[k] for k in ROBOT_ROW],
+                               [self.act[k] if k else None for k in MAP_ROW])
 
         canvas = self.iface.mapCanvas()
         self.zone_tool = ZoneMapTool(canvas)
-        self.zone_tool.setAction(self.act_zone)  # QGIS unchecks it when another tool is picked
+        self.zone_tool.setAction(self.act["zone"])  # QGIS unchecks it when another tool is picked
         self.zone_tool.zoneDrawn.connect(self._on_zone)
         self.goto_tool = GoToMapTool(canvas)
-        self.goto_tool.setAction(self.act_goto)
+        self.goto_tool.setAction(self.act["goto"])
         self.goto_tool.pointPicked.connect(self._on_goto)
 
-    def _add(self, text, slot, checkable=False, toolbar=True, capability=None):
-        action = QAction(text, self.iface.mainWindow())
-        action.setCheckable(checkable)
-        action.triggered.connect(slot)
-        if toolbar:
-            self.toolbar.addAction(action)
-        self.iface.addPluginToMenu(self.menu, action)
-        self.actions.append(action)
-        if capability:
-            self._capability_actions.setdefault(capability, []).append(action)
-        return action
+        self._apply_capabilities()
 
     def unload(self):
         self._drop_client()
@@ -119,25 +138,22 @@ class ValetudoPlugin:
         if self.zone_tool is not None:
             self.zone_tool.cleanup()
         self.zone_tool = self.goto_tool = None
-        for action in self.actions:
-            self.iface.removePluginMenu(self.menu, action)
-        self.actions = []
-        if self.panel is not None:
-            self.iface.removePluginMenu(self.menu, self.act_panel)
-            self.iface.removeDockWidget(self.panel)
-            self.panel.deleteLater()
-            self.panel = self.act_panel = None
+
+        for key in MENU:
+            if key is not None and key in self.act:
+                self.iface.removePluginMenu(self.menu, self.act[key])
         if self.camera_panel is not None:
             self.camera_panel.shutdown()
-            self.iface.removePluginMenu(self.menu, self.act_camera)
-            self.iface.removeDockWidget(self.camera_panel)
-            self.camera_panel.deleteLater()
-            self.camera_panel = self.act_camera = None
-        self._capability_actions = {}
-        if self.toolbar:
+        for dock in (self.panel, self.camera_panel):
+            if dock is not None:
+                self.iface.removeDockWidget(dock)
+                dock.deleteLater()
+        self.panel = self.camera_panel = None
+        if self.toolbar is not None:
             self.iface.mainWindow().removeToolBar(self.toolbar)
             self.toolbar.deleteLater()
             self.toolbar = None
+        self.act = {}
         remove_translator(self.translator)
         self.translator = None
 
@@ -145,24 +161,28 @@ class ValetudoPlugin:
     # Client
     # ------------------------------------------------------------------
 
-    def _get_client(self):
-        """Return the client, creating it if needed. None if not configured."""
+    def _get_client(self, prompt=True):
+        """Return the client, creating it if needed.
+
+        prompt=False never opens the settings dialog (e.g. a panel restored at
+        QGIS startup); it just returns None when no robot is configured.
+        """
         if self.client:
             return self.client
         cfg = load_settings()
         if not cfg["url"]:
-            if not self.configure():
+            if not prompt or not self.configure():
                 return None
             cfg = load_settings()
             if not cfg["url"]:
                 return None
         self.client = ValetudoClient(cfg["url"], cfg["authcfg"])
         self.client.error.connect(self._on_error)
+        self.client.reachable.connect(self._on_reachable)
         self.client.commandDone.connect(self._on_command_done)
         self.client.mapReceived.connect(self._on_map)
         self.client.capabilitiesReceived.connect(self._on_capabilities)
-        if self.panel is not None:
-            self.panel.attach(self.client)
+        self.panel.attach(self.client)
         self.client.fetch_capabilities()
         return self.client
 
@@ -173,19 +193,35 @@ class ValetudoPlugin:
             self.client = None
             if self.panel is not None:
                 self.panel.attach(None)
-        if hasattr(self, "act_live"):
-            self.act_live.setChecked(False)
+        self._reachable = None
+        if "live" in self.act:
+            self.act["live"].setChecked(False)
         self._on_capabilities(None)  # unknown robot: re-enable everything
 
     def _on_capabilities(self, capabilities):
-        """Disable the actions the robot does not support (None = unknown)."""
-        supported = set(capabilities) if capabilities is not None else None
-        for capability, actions in self._capability_actions.items():
-            ok = supported is None or capability in supported
-            for action in actions:
-                action.setEnabled(ok)
-                action.setToolTip(action.text() if ok else
-                                  f"{action.text()} — {tr('Not supported by this robot.')}")
+        self.capabilities = set(capabilities) if capabilities is not None else None
+        self._apply_capabilities()
+
+    def _apply_capabilities(self):
+        """Grey out actions the robot does not support (all enabled while unknown)."""
+        for key, capability in REQUIRED_CAPABILITY.items():
+            action = self.act.get(key)
+            if action is None:
+                continue
+            ok = self.capabilities is None or capability in self.capabilities
+            if not ok and action.isChecked():
+                self.iface.actionPan().trigger()   # leave a map tool that became unsupported
+            action.setEnabled(ok)
+            action.setToolTip(action.text() if ok else
+                              f"{action.text()} — {tr('Not supported by this robot.')}")
+
+    def _on_reachable(self, ok):
+        """Report only changes, so an offline robot does not flood the message bar."""
+        previous, self._reachable = self._reachable, ok
+        if ok and previous is False:
+            self._message(tr("Robot reachable again."), Qgis.MessageLevel.Success)
+        elif not ok and previous is not False:
+            self._message(tr("Robot unreachable."), Qgis.MessageLevel.Warning)
 
     # ------------------------------------------------------------------
     # Actions
@@ -193,12 +229,14 @@ class ValetudoPlugin:
 
     def configure(self, *_):
         dlg = SettingsDialog(self.iface.mainWindow())
-        if dlg.exec():
-            self._drop_client()  # settings may have changed
-            if self.camera_panel is not None:
-                self.camera_panel.restart_if_running()
-            return True
-        return False
+        if not dlg.exec():
+            return False
+        self._drop_client()  # settings may have changed
+        if self.panel is not None and self.panel.isVisible():
+            self._get_client(prompt=False)   # reconnect the visible panel at once
+        if self.camera_panel is not None:
+            self.camera_panel.restart_if_running()
+        return True
 
     def show_map(self, *_):
         client = self._get_client()
@@ -208,7 +246,7 @@ class ValetudoPlugin:
     def toggle_live(self, checked):
         client = self._get_client()
         if not client:
-            self.act_live.setChecked(False)
+            self.act["live"].setChecked(False)
             return
         if checked:
             client.start_polling(load_settings()["interval_s"] * 1000)
@@ -234,8 +272,9 @@ class ValetudoPlugin:
 
     # -- map tools --------------------------------------------------------------
 
-    def _activate_tool(self, tool, action, checked, hint):
+    def _activate_tool(self, tool, key, checked, hint):
         canvas = self.iface.mapCanvas()
+        action = self.act[key]
         if not checked:  # clicking the active tool again turns it off
             if canvas.mapTool() is tool:
                 self.iface.actionPan().trigger()
@@ -252,11 +291,11 @@ class ValetudoPlugin:
         self._message(hint, Qgis.MessageLevel.Info)
 
     def activate_zone_tool(self, checked):
-        self._activate_tool(self.zone_tool, self.act_zone, checked,
+        self._activate_tool(self.zone_tool, "zone", checked,
                             tr("Drag a rectangle on the map to clean that zone."))
 
     def activate_goto_tool(self, checked):
-        self._activate_tool(self.goto_tool, self.act_goto, checked,
+        self._activate_tool(self.goto_tool, "goto", checked,
                             tr("Click on the map to send the robot there."))
 
     def _on_zone(self, rect):
@@ -279,8 +318,7 @@ class ValetudoPlugin:
     # ------------------------------------------------------------------
 
     def _on_map(self, map_json):
-        if self.panel is not None:
-            self.panel.update_map(map_json)
+        self.panel.update_map(map_json)
         if not self.layers.exists():
             self._prepare_project()
         if self.layers.update(map_json):

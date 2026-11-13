@@ -49,7 +49,7 @@ class ValetudoClient(QObject):
         self._replies = set()   # keeps replies alive until they finish
         self._map_pending = False
         self._timer = QTimer(self)
-        self._timer.timeout.connect(self.fetch_map)
+        self._timer.timeout.connect(lambda: self.fetch_map(quiet=True))
 
     # -- plumbing -----------------------------------------------------------
 
@@ -145,15 +145,16 @@ class ValetudoClient(QObject):
                   lambda d: self.presetsReceived.emit(capability, self._as_list(d)),
                   quiet=quiet)
 
-    def fetch_map(self):
+    def fetch_map(self, quiet=False):
         if self._map_pending:  # do not pile up requests if the robot is slow
             return
         self._map_pending = True
         self._get("/robot/state/map", self.mapReceived.emit,
-                  on_finish=lambda: setattr(self, "_map_pending", False))
+                  on_finish=lambda: setattr(self, "_map_pending", False), quiet=quiet)
 
     def start_polling(self, interval_ms=2000):
-        self.fetch_map()
+        """Background map refresh: failures are reported through reachable() only."""
+        self.fetch_map(quiet=True)
         self._timer.start(interval_ms)
 
     def stop_polling(self):

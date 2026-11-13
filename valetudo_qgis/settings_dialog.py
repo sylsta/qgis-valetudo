@@ -20,6 +20,8 @@ KEY_CAMERA_URL = "valetudo/camera_url"
 KEY_FFMPEG = "valetudo/ffmpeg"
 KEY_CAMERA_WIDTH = "valetudo/camera_width"
 KEY_NOTIFY_DOCK = "valetudo/notify_dock"
+KEY_SSH_USER = "valetudo/ssh_user"
+KEY_SSH_PORT = "valetudo/ssh_port"
 
 DEFAULT_CAMERA_PORT = 8555
 
@@ -41,6 +43,8 @@ def load_settings():
         "ffmpeg": s.value(KEY_FFMPEG, "", type=str),
         "camera_width": s.value(KEY_CAMERA_WIDTH, 640, type=int),
         "notify_dock": s.value(KEY_NOTIFY_DOCK, True, type=bool),
+        "ssh_user": s.value(KEY_SSH_USER, "root", type=str) or "root",
+        "ssh_port": s.value(KEY_SSH_PORT, 22, type=int),
     }
 
 
@@ -79,6 +83,13 @@ class SettingsDialog(QDialog):
         self.notify_dock = QCheckBox(tr("Warn when a dock tank is empty, full or missing"))
         self.notify_dock.setChecked(cfg["notify_dock"])
 
+        # SSH (robot reboot): key-based login only, no password is ever stored.
+        self.ssh_user = QLineEdit(cfg["ssh_user"])
+        self.ssh_user.setPlaceholderText("root")
+        self.ssh_port = QSpinBox()
+        self.ssh_port.setRange(1, 65535)
+        self.ssh_port.setValue(cfg["ssh_port"])
+
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self.accept)
@@ -92,6 +103,8 @@ class SettingsDialog(QDialog):
         form.addRow(tr("ffmpeg path"), self.ffmpeg)
         form.addRow(tr("Video width"), self.camera_width)
         form.addRow(tr("Dock station notifications"), self.notify_dock)
+        form.addRow(tr("SSH user (reboot)"), self.ssh_user)
+        form.addRow(tr("SSH port (reboot)"), self.ssh_port)
         form.addRow(buttons)
 
     def accept(self):
@@ -103,4 +116,6 @@ class SettingsDialog(QDialog):
         s.setValue(KEY_FFMPEG, self.ffmpeg.text().strip())
         s.setValue(KEY_CAMERA_WIDTH, self.camera_width.value())
         s.setValue(KEY_NOTIFY_DOCK, self.notify_dock.isChecked())
+        s.setValue(KEY_SSH_USER, self.ssh_user.text().strip() or "root")
+        s.setValue(KEY_SSH_PORT, self.ssh_port.value())
         super().accept()

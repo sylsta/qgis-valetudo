@@ -55,6 +55,12 @@ persistent warning when the fresh water tank or the detergent is empty, the
 waste water tank or the dust bag is full, or a tank is missing; a short message
 confirms when it is OK again. Turn it off in the settings.
 
+**Reboot robot (SSH)…** (Valetudo menu and status panel): Valetudo deliberately
+has no reboot API, so the plugin runs `ssh <user>@<robot> reboot` after a
+confirmation. It needs an SSH client and key-based login to the robot
+(`ssh-copy-id root@<robot>`); no password is ever stored or asked for. SSH user
+and port are in the settings (`root`, 22 by default).
+
 Actions the robot does not support are greyed out. Zone and go-to tools need the
 map to be shown first, and switch back to the Pan tool after each use.
 
@@ -73,6 +79,7 @@ is the Swagger UI embedded in the robot: `http://<robot-ip>/swagger/`.
 | `status_panel.py`            | Dockable status panel with controls                     |
 | `camera.py`                  | H.264 stream decoding through an ffmpeg subprocess      |
 | `camera_panel.py`            | Dockable camera panel                                   |
+| `ssh_reboot.py`              | Robot reboot over SSH (key-based, non-blocking)         |
 | `map_tools.py`               | Map tools: draw a cleaning zone, pick a go-to target    |
 | `coords.py`                  | Frame conversion (the only place that flips the Y axis) |
 | `settings_dialog.py`         | Settings (URL, authentication, refresh interval)        |

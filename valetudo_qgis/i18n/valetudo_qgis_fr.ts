@@ -619,5 +619,41 @@
         <source>Dock station notifications</source>
         <translation>Notifications de la station</translation>
     </message>
+    <message>
+        <source>Reboot robot (SSH)…</source>
+        <translation>Redémarrer le robot (SSH)…</translation>
+    </message>
+    <message>
+        <source>Reboot robot</source>
+        <translation>Redémarrer le robot</translation>
+    </message>
+    <message>
+        <source>Reboot the robot now over SSH ({user}@{host})?
+
+Any cleaning in progress will be interrupted. The robot will be unreachable for a minute or two.</source>
+        <translation>Redémarrer le robot maintenant via SSH ({user}@{host}) ?
+
+Un nettoyage en cours sera interrompu. Le robot sera injoignable pendant une ou deux minutes.</translation>
+    </message>
+    <message>
+        <source>Reboot command sent. The robot will be back in a minute or two.</source>
+        <translation>Commande de redémarrage envoyée. Le robot sera de retour d'ici une ou deux minutes.</translation>
+    </message>
+    <message>
+        <source>ssh not found: install an SSH client.</source>
+        <translation>ssh introuvable : installez un client SSH.</translation>
+    </message>
+    <message>
+        <source>SSH reboot failed: {detail}</source>
+        <translation>Échec du redémarrage SSH : {detail}</translation>
+    </message>
+    <message>
+        <source>SSH user (reboot)</source>
+        <translation>Utilisateur SSH (redémarrage)</translation>
+    </message>
+    <message>
+        <source>SSH port (reboot)</source>
+        <translation>Port SSH (redémarrage)</translation>
+    </message>
 </context>
 </TS>

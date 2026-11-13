@@ -5,8 +5,8 @@ Valetudo menu and the status panel all show these same objects, so their
 enabled/checked state can never disagree.
 """
 
-from qgis.PyQt.QtCore import Qt, QTimer
-from qgis.PyQt.QtWidgets import QAction
+from qgis.PyQt.QtCore import Qt, QTimer, QUrl
+from qgis.PyQt.QtWidgets import QAction, QMessageBox
 from qgis.core import Qgis, QgsCoordinateReferenceSystem, QgsProject
 
 from .camera_panel import CameraPanel
@@ -15,6 +15,7 @@ from .i18n import install_translator, remove_translator, tr
 from .map_layers import ValetudoLayers, layer_names
 from .map_tools import GoToMapTool, ZoneMapTool
 from .settings_dialog import SettingsDialog, load_settings
+from .ssh_reboot import SshReboot
 from .status_panel import (
     DOCK_COMPONENT_PROBLEMS,
     ValetudoPanel,
@@ -42,7 +43,8 @@ ROBOT_ROW = ["start", "pause", "stop", "home"]
 MAP_ROW = ["show_map", "live", None, "clean_rooms", "zone", "goto"]
 TOOLBAR = ["show_map", "live", None] + ROBOT_ROW + [None, "clean_rooms", "zone", "goto",
                                                     None, "status_panel", "camera"]
-MENU = ["settings", "status_panel", "camera"] + MAP_ROW + ROBOT_ROW
+MENU = ["settings", "status_panel", "camera"] + MAP_ROW + ROBOT_ROW + [None, "reboot"]
+PANEL_ROBOT_ROW = ROBOT_ROW + [None, "reboot"]   # reboot: menu and panel, not the toolbar
 
 
 def command_labels():
@@ -75,6 +77,7 @@ class ValetudoPlugin:
         self.panel = self.camera_panel = None
         self._dock_state = {}  # dock component -> last known value
         self._watch = None
+        self._reboot = None
 
     # ------------------------------------------------------------------
     # GUI setup / teardown
@@ -100,6 +103,9 @@ class ValetudoPlugin:
         self._new_action("clean_rooms", tr("Clean selected rooms"), self.clean_selected)
         self._new_action("zone", labels["zone"], self.activate_zone_tool, checkable=True)
         self._new_action("goto", tr("Go here"), self.activate_goto_tool, checkable=True)
+        self._new_action("reboot", tr("Reboot robot (SSH)…"), self.reboot_robot)
+        self._reboot = SshReboot()
+        self._reboot.finished.connect(self._on_reboot_finished)
 
         # Panels: hidden by default; their toggle actions follow their visibility.
         self.panel = ValetudoPanel(win)
@@ -125,7 +131,7 @@ class ValetudoPlugin:
         for key in MENU:
             if key is not None:
                 self.iface.addPluginToMenu(self.menu, self.act[key])
-        self.panel.set_actions([self.act[k] for k in ROBOT_ROW],
+        self.panel.set_actions([self.act[k] if k else None for k in PANEL_ROBOT_ROW],
                                [self.act[k] if k else None for k in MAP_ROW])
 
         canvas = self.iface.mapCanvas()
@@ -368,6 +374,41 @@ class ValetudoPlugin:
         client = self._get_client()
         if client:
             client.go_to_qgis(point)
+
+    # -- reboot over SSH --------------------------------------------------------
+
+    def reboot_robot(self, *_):
+        cfg = load_settings()
+        if not cfg["url"] and not self.configure():
+            return
+        cfg = load_settings()
+        host = QUrl(cfg["url"]).host()
+        if not host:
+            return
+        answer = QMessageBox.question(
+            self.iface.mainWindow(), tr("Reboot robot"),
+            tr("Reboot the robot now over SSH ({user}@{host})?\n\n"
+               "Any cleaning in progress will be interrupted. The robot will be "
+               "unreachable for a minute or two.").format(user=cfg["ssh_user"], host=host),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        self.act["reboot"].setEnabled(False)   # one reboot at a time
+        self._reboot.start(host, cfg["ssh_user"], cfg["ssh_port"])
+
+    def _on_reboot_finished(self, result, detail):
+        if "reboot" in self.act:
+            self.act["reboot"].setEnabled(True)
+        if result == "sent":
+            self._message(tr("Reboot command sent. The robot will be back in a minute or two."),
+                          Qgis.MessageLevel.Success)
+        elif result == "ssh_missing":
+            self._message(tr("ssh not found: install an SSH client."), Qgis.MessageLevel.Critical)
+        else:
+            self.iface.messageBar().pushMessage(
+                "Valetudo", tr("SSH reboot failed: {detail}").format(detail=detail),
+                level=Qgis.MessageLevel.Critical, duration=0)
 
     # ------------------------------------------------------------------
     # Incoming data

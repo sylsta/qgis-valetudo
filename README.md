@@ -29,42 +29,76 @@ without restarting QGIS.
 
 1. *Plugins > Valetudo > Settings…*: enter the robot address (e.g. `http://192.168.1.23`)
    and click **Test connection**.
-2. Click the **Valetudo panel** button. That's the whole interface:
+2. Open the **Valetudo panel** (the only toolbar button, or *Plugins > Valetudo*).
+   The menu and the toolbar stay minimal: everything happens in the panel.
 
-   ```
-   Eureka J15 Pro Ultra        [Docked]  ⋯
-   ████████████████████ 99 %
-   ⚠ problems, only when there are some
-   ☐ Kitchen  ☐ Hallway  …      (rooms, if the robot knows them)
-   [ Clean everything ]         (or "Clean 2 room(s)" when rooms are ticked)
-   [ Pause ]        [ Dock ]
-   [ Clean a zone ] [ Go to… ]  (then draw / click on the map)
-   [ Show on map ]              (robot, rooms and path, live)
-   ▸ Camera
-   ```
+The panel, from top to bottom:
 
-   The **⋯** menu holds the rare tools: locate (beep), empty dust bin, wash and
-   dry mops, no-go zones and virtual walls, boot log, reboot over SSH, settings.
-   Tools the robot does not support are not shown.
+- **Header**, always visible: connection, robot model, a coloured state badge, the
+  battery, any robot error.
+- **Command list + Run**: pick a command and click **Run**. Commands: Start, Pause,
+  Stop, Return to dock, Show map, Live tracking, Clean selected rooms, Clean zone,
+  Go here, no-go zones and walls, Locate, Empty dust bin, Wash / Dry mops, Watch
+  robot boot, Reboot robot (SSH), Settings. Switched-on commands show a ✓;
+  unsupported ones are greyed out.
+  - *Clean selected rooms*: select rooms in the "Valetudo - map" layer first
+    (they are labelled with their Valetudo names).
+  - *Clean zone*: then drag a rectangle on the map.
+  - *Go here*: then click on the map. Robots without Valetudo's go-to (e.g.
+    Eureka J15 Pro Ultra) get an emulation: a 60 cm zone clean at that spot, then
+    a pause as soon as the robot is within 50 cm (it cleans on its way; a
+    first-time confirmation says so).
+- **Four tabs** (the last one used is remembered):
+  - **Robot**: state details, dock station (fresh and waste water tanks,
+    detergent, dust bag), fan speed and water usage (editable), attachments,
+    position (read by the panel itself, no need to show the map);
+  - **Camera**: live video, plays only while this tab is shown; camera light;
+  - **Maintenance**: consumables, current and total statistics;
+  - **Info**: Wi-Fi, recent events, supported features, boot log.
 
-**Go to… on robots without go-to** (e.g. Eureka J15 Pro Ultra): the plugin sends a
-60 cm zone clean at that spot and pauses the robot as soon as it is within 50 cm
-(it cleans on its way; a first-time confirmation says so).
+The panel refreshes itself while visible (every 5 s while the robot works, every
+30 s otherwise), even when the robot is docked. Sections fold with their arrow
+(remembered).
 
-**Camera**: open the Camera section; the video plays only while it is open. Needs a
-raw H.264 stream over TCP (default `tcp://<robot>:8555`) and **ffmpeg**.
+**Camera**: robots that expose a raw H.264 stream over TCP (default
+`tcp://<robot>:8555`). Needs **ffmpeg** (found in the `PATH`, or set its path in
+the settings). The stream reconnects by itself if it drops, and **Save snapshot**
+saves the current image as PNG.
 
-**No-go zones and virtual walls** (⋯ menu): edit them as two QGIS layers, then
-*Send to robot…* from the bar at the top of the map. Valetudo needs 4 corners per
-zone and 2 points per wall; other shapes are converted and the confirmation says so.
+**No-go zones and virtual walls**: *Edit no-go zones and walls* loads the
+robot's restrictions into two editable layers ("no-go zones" polygons, with a
+No-go / No-mop type, and "virtual walls" lines), on top of the map. Edit them
+with the usual QGIS tools (add, move vertices, snapping, undo); a bar at the top
+of the map offers *Send to robot…* (after a confirmation, they replace the
+robot's restrictions) and *Discard changes*. Valetudo needs 4 corners per zone and 2 points per wall: other
+shapes are converted (bounding rectangle, line ends) and the confirmation says
+so.
 
-**Notifications**: the plugin checks the dock every minute and warns when the fresh
-water or detergent is empty, the waste water or dust bag is full, or a tank is
-missing (can be turned off in the settings).
+**Dock station notifications**: once a robot is configured, the plugin checks
+the dock every minute in the background (panel open or not) and shows a
+persistent warning when the fresh water tank or the detergent is empty, the
+waste water tank or the dust bag is full, or a tank is missing; a short message
+confirms when it is OK again. Turn it off in the settings.
 
-**Reboot over SSH** (⋯ menu): needs key-based SSH login to the robot; no password
-is stored. The boot is then followed stage by stage in the *Valetudo* tab of the
-QGIS *Log Messages* panel.
+**Reboot robot (SSH)…** (Valetudo menu and status panel): Valetudo deliberately
+has no reboot API, so the plugin runs `ssh <user>@<robot> reboot` after a
+confirmation. It needs an SSH client and key-based login to the robot
+(`ssh-copy-id root@<robot>`); no password is ever stored or asked for. SSH user
+and port are in the settings (`root`, 22 by default).
+
+**Boot log**: after *Reboot robot (SSH)…*, or with *Watch robot boot* (e.g.
+after using the power button), the plugin follows the robot's startup and
+times each stage: offline, network up (SSH port answers), Valetudo answers
+(version), robot firmware ready (state, battery), camera stream available, then
+the total boot time and the end of Valetudo's own log. Lines go to the
+*Valetudo* tab of the QGIS *Log Messages* panel and to the *Boot log* section of
+the status panel (Info tab).
+
+Actions the robot does not support are greyed out. Zone and go-to tools need the
+map to be shown first, and switch back to the Pan tool after each use.
+
+The map is displayed in the robot's own frame, in centimetres. The API reference
+is the Swagger UI embedded in the robot: `http://<robot-ip>/swagger/`.
 
 ## Code layout
 

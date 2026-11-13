@@ -16,7 +16,7 @@ from .client import ValetudoClient
 from .goto_emulation import ZONE_SIZE_CM as GOTO_ZONE_SIZE_CM, GoToEmulator
 from .i18n import install_translator, remove_translator, tr
 from .icons import has_icon, icon
-from .map_layers import ValetudoLayers
+from .map_layers import ValetudoLayers, layer_names
 from .map_tools import GoToMapTool, ZoneMapTool
 from .restrictions import RestrictionLayers, layer_names as restriction_layer_names
 from .settings_dialog import SettingsDialog, load_settings
@@ -42,8 +42,11 @@ ALTERNATIVE_CAPABILITIES = {
 }
 
 REQUIRED_CAPABILITY = {
+    "start": "BasicControlCapability",
     "pause": "BasicControlCapability",
+    "stop": "BasicControlCapability",
     "home": "BasicControlCapability",
+    "clean_rooms": "MapSegmentationCapability",
     "zone": "ZoneCleaningCapability",
     "goto": "GoToLocationCapability",
     "locate": "LocateCapability",
@@ -54,13 +57,17 @@ REQUIRED_CAPABILITY = {
     "send_restrictions": "CombinedVirtualRestrictionsCapability",
 }
 
-# KISS: the menu and the toolbar only open the panel (and the settings);
-# everything else is in the panel, rare tools in its ⋯ menu.
-MENU = ["status_panel", "settings"]
+RESTRICTIONS_ROW = ["edit_restrictions", "send_restrictions"]   # menu and panel list
+
+DOCK_ROW = ["locate", "empty_dock", "mop_wash", "mop_dry"]   # menu and panel list
+
+# Layout, None = separator. The panel shows the robot and map rows.
+ROBOT_ROW = ["start", "pause", "stop", "home"]
+MAP_ROW = ["show_map", "live", None, "clean_rooms", "zone", "goto"]
+# Simple menu and toolbar: everything else is in the panel's command list.
 TOOLBAR = ["status_panel"]
-TOOLS = ["locate", None, "empty_dock", "mop_wash", "mop_dry", None,
-         "edit_restrictions", "send_restrictions", None, "watch_boot", "reboot", None,
-         "settings"]
+MENU = ["status_panel", "settings"]
+PANEL_SYSTEM_ROW = ["watch_boot", "reboot"]   # menu and panel command list, not the toolbar
 LOG_TAG = "Valetudo"   # tab of the QGIS "Log Messages" panel
 
 
@@ -126,16 +133,16 @@ class ValetudoPlugin:
         win = self.iface.mainWindow()
 
         self._new_action("settings", tr("Settings…"), self.configure)
-        self._new_action("live", tr("Show on map"), self.toggle_live, checkable=True)
-        self.act["live"].setIcon(icon("show_map"))
-        for key in ("pause", "home"):
+        self._new_action("show_map", tr("Show map"), self.show_map)
+        self._new_action("live", tr("Live tracking"), self.toggle_live, checkable=True)
+        for key in ROBOT_ROW:
             self._new_action(key, labels[key], lambda *_, k=key: self.control(k))
-        self.act["home"].setText(tr("Dock"))
-        self._new_action("zone", tr("Clean a zone"), self.activate_zone_tool, checkable=True)
-        self._new_action("goto", tr("Go to…"), self.activate_goto_tool, checkable=True)
+        self._new_action("clean_rooms", tr("Clean selected rooms"), self.clean_selected)
+        self._new_action("zone", labels["zone"], self.activate_zone_tool, checkable=True)
+        self._new_action("goto", tr("Go here"), self.activate_goto_tool, checkable=True)
         dock_labels = {"locate": tr("Locate robot (beep)"), "empty_dock": tr("Empty dust bin"),
                        "mop_wash": tr("Wash mops"), "mop_dry": tr("Dry mops")}
-        for key in ("locate", "empty_dock", "mop_wash", "mop_dry"):
+        for key in DOCK_ROW:
             self._new_action(key, dock_labels[key], lambda *_, k=key: self.simple_command(k))
         self._new_action("edit_restrictions", tr("Edit no-go zones and walls"),
                          self.edit_restrictions)
@@ -170,7 +177,9 @@ class ValetudoPlugin:
         for key in MENU:
             if key is not None:
                 self.iface.addPluginToMenu(self.menu, self.act[key])
-        self.panel.bind_actions(self.act, TOOLS)
+        # Frequent commands as icon buttons; the others in the panel's "More" menu.
+        self.panel.set_actions([self.act[k] for k in ROBOT_ROW + MAP_ROW + RESTRICTIONS_ROW
+                                + DOCK_ROW + PANEL_SYSTEM_ROW + ["settings"] if k])
 
         canvas = self.iface.mapCanvas()
         self.zone_tool = ZoneMapTool(canvas)
@@ -297,8 +306,6 @@ class ValetudoPlugin:
             if not ok and action.isChecked():
                 self.iface.actionPan().trigger()   # leave a map tool that became unsupported
             action.setEnabled(ok)
-            if key in TOOLS:
-                action.setVisible(ok)   # keep the ⋯ menu short
             action.setToolTip(action.text() if ok else
                               f"{action.text()} — {tr('Not supported by this robot.')}")
 
@@ -361,6 +368,11 @@ class ValetudoPlugin:
         if self.panel is not None:
             self.panel.camera.restart_if_running()
         return True
+
+    def show_map(self, *_):
+        client = self._get_client()
+        if client:
+            client.fetch_map()
 
     def toggle_live(self, checked):
         client = self._get_client()
@@ -473,6 +485,18 @@ class ValetudoPlugin:
         client = self._get_client()
         if client:
             client.simple_command(key)
+
+    def clean_selected(self, *_):
+        ids = self.layers.selected_segment_ids()
+        if not ids:
+            self._message(
+                tr("Select one or more rooms in the “{layer}” layer.").format(
+                    layer=layer_names()["rooms"]),
+                Qgis.MessageLevel.Info)
+            return
+        client = self._get_client()
+        if client:
+            client.clean_segments(ids)
 
     # -- map tools --------------------------------------------------------------
 
@@ -601,6 +625,7 @@ class ValetudoPlugin:
         cfg = load_settings()
         host = QUrl(cfg["url"]).host()
         camera_port = QUrl(cfg["camera_url"]).port() if cfg["camera_url"] else -1
+        self.panel.clear_boot_log()
         self.boot.start(client, host, cfg["ssh_port"],
                         camera_port if camera_port > 0 else None, expect_offline)
 
@@ -637,6 +662,7 @@ class ValetudoPlugin:
         problem = key in ("no_offline", "camera_missing", "timeout")
         QgsMessageLog.logMessage(line, LOG_TAG, Qgis.MessageLevel.Warning if problem
                                  else Qgis.MessageLevel.Info)
+        self.panel.add_boot_log(line)
         if key == "done":
             self._message(text, Qgis.MessageLevel.Success)
         elif problem:
@@ -646,16 +672,21 @@ class ValetudoPlugin:
         if not lines:
             note = tr("Valetudo's log is not available.")
             QgsMessageLog.logMessage(note, LOG_TAG, Qgis.MessageLevel.Info)
+            self.panel.add_boot_log(note)
             return
         header = tr("End of Valetudo's log:")
         QgsMessageLog.logMessage(header + "\n" + "\n".join(lines), LOG_TAG,
                                  Qgis.MessageLevel.Info)
+        self.panel.add_boot_log(header)
+        for line in lines:
+            self.panel.add_boot_log("  " + line)
 
     # ------------------------------------------------------------------
     # Incoming data
     # ------------------------------------------------------------------
 
     def _on_map(self, map_json):
+        self.panel.update_map(map_json)
         if not self.layers.exists():
             self._prepare_project()
         if self.layers.update(map_json):

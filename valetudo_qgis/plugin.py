@@ -10,6 +10,7 @@ from .map_layers import ValetudoLayers, layer_names
 from .map_tools import GoToMapTool, ZoneMapTool
 from .settings_dialog import SettingsDialog, load_settings
 from .status_panel import ValetudoPanel
+from .camera_panel import CameraPanel
 
 MIN_ZONE_SIZE_CM = 20  # smaller rectangles are treated as accidental clicks
 
@@ -43,6 +44,8 @@ class ValetudoPlugin:
         self._capability_actions = {}  # Valetudo capability name -> [QAction]
         self.panel = None
         self.act_panel = None
+        self.camera_panel = None
+        self.act_camera = None
 
     # ------------------------------------------------------------------
     # GUI setup / teardown
@@ -65,6 +68,15 @@ class ValetudoPlugin:
         self.act_panel.setText(tr("Status panel"))
         self.toolbar.addAction(self.act_panel)
         self.iface.addPluginToMenu(self.menu, self.act_panel)
+
+        # Camera panel: video plays only while it is visible.
+        self.camera_panel = CameraPanel(self.iface.mainWindow())
+        self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.camera_panel)
+        self.camera_panel.hide()
+        self.act_camera = self.camera_panel.toggleViewAction()
+        self.act_camera.setText(tr("Camera"))
+        self.toolbar.addAction(self.act_camera)
+        self.iface.addPluginToMenu(self.menu, self.act_camera)
         self.act_live = self._add(tr("Live tracking"), self.toggle_live, checkable=True)
         self.toolbar.addSeparator()
         for key in ("start", "pause", "stop", "home"):
@@ -115,6 +127,12 @@ class ValetudoPlugin:
             self.iface.removeDockWidget(self.panel)
             self.panel.deleteLater()
             self.panel = self.act_panel = None
+        if self.camera_panel is not None:
+            self.camera_panel.shutdown()
+            self.iface.removePluginMenu(self.menu, self.act_camera)
+            self.iface.removeDockWidget(self.camera_panel)
+            self.camera_panel.deleteLater()
+            self.camera_panel = self.act_camera = None
         self._capability_actions = {}
         if self.toolbar:
             self.iface.mainWindow().removeToolBar(self.toolbar)
@@ -177,6 +195,8 @@ class ValetudoPlugin:
         dlg = SettingsDialog(self.iface.mainWindow())
         if dlg.exec():
             self._drop_client()  # settings may have changed
+            if self.camera_panel is not None:
+                self.camera_panel.restart_if_running()
             return True
         return False
 

@@ -475,5 +475,81 @@
         <source>{hours} h left</source>
         <translation>{hours} h restantes</translation>
     </message>
+    <message>
+        <source>Camera</source>
+        <translation>Caméra</translation>
+    </message>
+    <message>
+        <source>Valetudo camera</source>
+        <translation>Caméra Valetudo</translation>
+    </message>
+    <message>
+        <source>Save snapshot</source>
+        <translation>Enregistrer une capture</translation>
+    </message>
+    <message>
+        <source>No camera URL: set it in the settings.</source>
+        <translation>Aucune URL de caméra : définissez-la dans les paramètres.</translation>
+    </message>
+    <message>
+        <source>Playing · {fps} fps</source>
+        <translation>Lecture · {fps} i/s</translation>
+    </message>
+    <message>
+        <source>Play</source>
+        <translation>Lire</translation>
+    </message>
+    <message>
+        <source>Connecting…</source>
+        <translation>Connexion…</translation>
+    </message>
+    <message>
+        <source>Playing</source>
+        <translation>Lecture</translation>
+    </message>
+    <message>
+        <source>Stopped</source>
+        <translation>Arrêtée</translation>
+    </message>
+    <message>
+        <source>No video</source>
+        <translation>Pas de vidéo</translation>
+    </message>
+    <message>
+        <source>ffmpeg not found: install it or set its path in the settings.</source>
+        <translation>ffmpeg introuvable : installez-le ou indiquez son chemin dans les paramètres.</translation>
+    </message>
+    <message>
+        <source>Stream lost, reconnecting in {seconds} s…</source>
+        <translation>Flux perdu, reconnexion dans {seconds} s…</translation>
+    </message>
+    <message>
+        <source>ffmpeg error: {detail}</source>
+        <translation>Erreur ffmpeg : {detail}</translation>
+    </message>
+    <message>
+        <source>PNG images (*.png)</source>
+        <translation>Images PNG (*.png)</translation>
+    </message>
+    <message>
+        <source>Snapshot saved: {path}</source>
+        <translation>Capture enregistrée : {path}</translation>
+    </message>
+    <message>
+        <source>ffmpeg (found in PATH)</source>
+        <translation>ffmpeg (trouvé dans le PATH)</translation>
+    </message>
+    <message>
+        <source>Camera stream URL</source>
+        <translation>URL du flux caméra</translation>
+    </message>
+    <message>
+        <source>ffmpeg path</source>
+        <translation>Chemin de ffmpeg</translation>
+    </message>
+    <message>
+        <source>Video width</source>
+        <translation>Largeur de la vidéo</translation>
+    </message>
 </context>
 </TS>

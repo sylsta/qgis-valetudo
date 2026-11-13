@@ -42,6 +42,12 @@ without restarting QGIS.
    is visible (every 5 s while the robot works, every 30 s otherwise), even when
    the robot is docked.
 
+8. **Camera**: a dockable panel showing the robot's live video, for robots that
+   expose a raw H.264 stream over TCP (default `tcp://<robot>:8555`). It needs
+   **ffmpeg** (found in the `PATH`, or set its path in the settings). Video plays
+   while the panel is visible and stops when it is hidden; the stream reconnects
+   by itself if it drops, and **Save snapshot** saves the current image as PNG.
+
 Actions the robot does not support are greyed out. Zone and go-to tools need the
 map to be shown first, and switch back to the Pan tool after each use.
 
@@ -58,6 +64,8 @@ is the Swagger UI embedded in the robot: `http://<robot-ip>/swagger/`.
 | `client.py`                  | Asynchronous HTTP calls to the Valetudo API             |
 | `map_layers.py`              | Map JSON -> QGIS layers, incremental updates            |
 | `status_panel.py`            | Dockable status panel with controls                     |
+| `camera.py`                  | H.264 stream decoding through an ffmpeg subprocess      |
+| `camera_panel.py`            | Dockable camera panel                                   |
 | `map_tools.py`               | Map tools: draw a cleaning zone, pick a go-to target    |
 | `coords.py`                  | Frame conversion (the only place that flips the Y axis) |
 | `settings_dialog.py`         | Settings (URL, authentication, refresh interval)        |

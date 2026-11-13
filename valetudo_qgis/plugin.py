@@ -13,6 +13,7 @@ from .client import ValetudoClient
 from .i18n import install_translator, remove_translator, tr
 from .map_layers import ValetudoLayers, layer_names
 from .map_tools import GoToMapTool, ZoneMapTool
+from .restrictions import RestrictionLayers, layer_names as restriction_layer_names
 from .settings_dialog import SettingsDialog, load_settings
 from .ssh_reboot import SshReboot
 from .status_panel import (
@@ -39,7 +40,11 @@ REQUIRED_CAPABILITY = {
     "empty_dock": "AutoEmptyDockManualTriggerCapability",
     "mop_wash": "MopDockCleanManualTriggerCapability",
     "mop_dry": "MopDockDryManualTriggerCapability",
+    "edit_restrictions": "CombinedVirtualRestrictionsCapability",
+    "send_restrictions": "CombinedVirtualRestrictionsCapability",
 }
+
+RESTRICTIONS_ROW = ["edit_restrictions", "send_restrictions"]   # menu and panel list
 
 DOCK_ROW = ["locate", "empty_dock", "mop_wash", "mop_dry"]   # menu and panel list
 
@@ -48,7 +53,8 @@ ROBOT_ROW = ["start", "pause", "stop", "home"]
 MAP_ROW = ["show_map", "live", None, "clean_rooms", "zone", "goto"]
 TOOLBAR = ["show_map", "live", None] + ROBOT_ROW + [None, "clean_rooms", "zone", "goto",
                                                     None, "status_panel"]
-MENU = ["settings", "status_panel"] + MAP_ROW + ROBOT_ROW + [None] + DOCK_ROW + [None, "reboot"]
+MENU = (["settings", "status_panel"] + MAP_ROW + [None] + RESTRICTIONS_ROW + [None] + ROBOT_ROW
+        + [None] + DOCK_ROW + [None, "reboot"])
 PANEL_SYSTEM_ROW = ["reboot"]   # reboot: menu and panel command list, not the toolbar
 
 
@@ -69,6 +75,7 @@ def command_labels():
         "empty_dock": tr("Empty dust bin"),
         "mop_wash": tr("Wash mops"),
         "mop_dry": tr("Dry mops"),
+        "restrictions": tr("Send no-go zones and walls"),
     }
 
 
@@ -83,6 +90,7 @@ class ValetudoPlugin:
         self.capabilities = None  # None = unknown (no robot contacted yet)
         self._reachable = None
         self.layers = ValetudoLayers(QgsProject.instance())
+        self.restrictions = RestrictionLayers(QgsProject.instance())
         self.zone_tool = self.goto_tool = None
         self.panel = None
         self._dock_state = {}  # dock component -> last known value
@@ -117,6 +125,10 @@ class ValetudoPlugin:
                        "mop_wash": tr("Wash mops"), "mop_dry": tr("Dry mops")}
         for key in DOCK_ROW:
             self._new_action(key, dock_labels[key], lambda *_, k=key: self.simple_command(k))
+        self._new_action("edit_restrictions", tr("Edit no-go zones and walls"),
+                         self.edit_restrictions)
+        self._new_action("send_restrictions", tr("Send no-go zones and walls to robot…"),
+                         self.send_restrictions)
         self._new_action("reboot", tr("Reboot robot (SSH)…"), self.reboot_robot)
         self._reboot = SshReboot()
         self._reboot.finished.connect(self._on_reboot_finished)
@@ -141,7 +153,8 @@ class ValetudoPlugin:
                 self.iface.addPluginToMenu(self.menu, self.act[key])
         # Reboot asks for confirmation, so it can safely sit in the same list.
         self.panel.set_actions(
-            [self.act[k] for k in ROBOT_ROW + MAP_ROW + DOCK_ROW + PANEL_SYSTEM_ROW if k])
+            [self.act[k] for k in ROBOT_ROW + MAP_ROW + RESTRICTIONS_ROW + DOCK_ROW
+             + PANEL_SYSTEM_ROW if k])
 
         canvas = self.iface.mapCanvas()
         self.zone_tool = ZoneMapTool(canvas)
@@ -214,6 +227,7 @@ class ValetudoPlugin:
         self.client.commandDone.connect(self._on_command_done)
         self.client.mapReceived.connect(self._on_map)
         self.client.capabilitiesReceived.connect(self._on_capabilities)
+        self.client.restrictionsReceived.connect(self._on_restrictions)
         self.client.attributesReceived.connect(self._on_attributes)
         self.panel.attach(self.client)
         self.client.fetch_capabilities(quiet=True)   # retried once the robot answers
@@ -326,6 +340,61 @@ class ValetudoPlugin:
         client = self._get_client()
         if client:
             client.basic_control(action)
+
+    # -- no-go zones and virtual walls ---------------------------------------------
+
+    def edit_restrictions(self, *_):
+        """Load the robot's restrictions into two editable layers."""
+        client = self._get_client()
+        if not client:
+            return
+        if not self.layers.exists():
+            client.fetch_map()   # show the map too: zones are drawn on top of it
+        client.fetch_restrictions()
+
+    def _on_restrictions(self, data):
+        if not self.layers.exists():
+            self._prepare_project()
+        zones, _walls = self.restrictions.load(data)
+        zones.startEditing()
+        self.iface.setActiveLayer(zones)
+        names = restriction_layer_names()
+        self.iface.messageBar().pushMessage(
+            "Valetudo",
+            tr("Edit the “{zones}” and “{walls}” layers (polygons and lines), then use "
+               "“Send no-go zones and walls to robot…”.").format(
+                zones=names["zones"], walls=names["walls"]),
+            level=Qgis.MessageLevel.Info, duration=15)
+
+    def send_restrictions(self, *_):
+        if not self.restrictions.exists():
+            self._message(tr("Use “Edit no-go zones and walls” first."), Qgis.MessageLevel.Info)
+            return
+        client = self._get_client()
+        if not client:
+            return
+        payload, warnings = self.restrictions.to_payload()
+        text = tr("Send {zones} no-go zone(s) and {walls} virtual wall(s) to the robot?\n"
+                  "They replace all the restrictions currently on the robot.").format(
+            zones=len(payload["restrictedZones"]), walls=len(payload["virtualWalls"]))
+        notes = []
+        if warnings["zones_approximated"]:
+            notes.append(tr("{n} zone(s) without exactly 4 corners are replaced by their "
+                            "bounding rectangle.").format(n=warnings["zones_approximated"]))
+        if warnings["walls_simplified"]:
+            notes.append(tr("{n} wall(s) with more than 2 points become straight "
+                            "lines between their ends.").format(n=warnings["walls_simplified"]))
+        if warnings["skipped"]:
+            notes.append(tr("{n} empty or invalid shape(s) are ignored.").format(
+                n=warnings["skipped"]))
+        if notes:
+            text += "\n\n" + "\n".join(notes)
+        answer = QMessageBox.question(
+            self.iface.mainWindow(), tr("Send no-go zones and walls"), text,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+        if answer == QMessageBox.StandardButton.Yes:
+            client.set_restrictions(payload)
 
     def simple_command(self, key):
         client = self._get_client()
@@ -447,6 +516,9 @@ class ValetudoPlugin:
         self._message(msg, Qgis.MessageLevel.Warning)
 
     def _on_command_done(self, key):
+        if key == "restrictions" and self.client is not None:
+            self.client.fetch_map()          # show what the robot now uses
+            self.client.fetch_restrictions()  # and reload the editable layers from it
         label = command_labels().get(key, key)
         self._message(tr("Command “{command}” sent.").format(command=label),
                       Qgis.MessageLevel.Success)

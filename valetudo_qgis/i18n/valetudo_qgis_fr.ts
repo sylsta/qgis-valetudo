@@ -827,5 +827,59 @@ Un nettoyage en cours sera interrompu. Le robot sera injoignable pendant une ou 
         <source>Dry mops</source>
         <translation>Sécher les serpillières</translation>
     </message>
+    <message>
+        <source>Valetudo - no-go zones (editable)</source>
+        <translation>Valetudo - zones interdites (modifiables)</translation>
+    </message>
+    <message>
+        <source>Valetudo - virtual walls (editable)</source>
+        <translation>Valetudo - murs virtuels (modifiables)</translation>
+    </message>
+    <message>
+        <source>No-go</source>
+        <translation>Interdite</translation>
+    </message>
+    <message>
+        <source>No-mop</source>
+        <translation>Sans serpillière</translation>
+    </message>
+    <message>
+        <source>Edit no-go zones and walls</source>
+        <translation>Modifier les zones interdites et les murs</translation>
+    </message>
+    <message>
+        <source>Send no-go zones and walls to robot…</source>
+        <translation>Envoyer les zones interdites et les murs au robot…</translation>
+    </message>
+    <message>
+        <source>Send no-go zones and walls</source>
+        <translation>Envoi des zones interdites et des murs</translation>
+    </message>
+    <message>
+        <source>Edit the “{zones}” and “{walls}” layers (polygons and lines), then use “Send no-go zones and walls to robot…”.</source>
+        <translation>Modifiez les couches « {zones} » et « {walls} » (polygones et lignes), puis utilisez « Envoyer les zones interdites et les murs au robot… ».</translation>
+    </message>
+    <message>
+        <source>Use “Edit no-go zones and walls” first.</source>
+        <translation>Utilisez d'abord « Modifier les zones interdites et les murs ».</translation>
+    </message>
+    <message>
+        <source>Send {zones} no-go zone(s) and {walls} virtual wall(s) to the robot?
+They replace all the restrictions currently on the robot.</source>
+        <translation>Envoyer {zones} zone(s) interdite(s) et {walls} mur(s) virtuel(s) au robot ?
+Ils remplacent toutes les restrictions actuellement sur le robot.</translation>
+    </message>
+    <message>
+        <source>{n} zone(s) without exactly 4 corners are replaced by their bounding rectangle.</source>
+        <translation>{n} zone(s) sans exactement 4 coins sont remplacées par leur rectangle englobant.</translation>
+    </message>
+    <message>
+        <source>{n} wall(s) with more than 2 points become straight lines between their ends.</source>
+        <translation>{n} mur(s) de plus de 2 points deviennent des segments droits entre leurs extrémités.</translation>
+    </message>
+    <message>
+        <source>{n} empty or invalid shape(s) are ignored.</source>
+        <translation>{n} forme(s) vide(s) ou invalide(s) sont ignorées.</translation>
+    </message>
 </context>
 </TS>

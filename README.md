@@ -57,6 +57,15 @@ without restarting QGIS.
    snapshot** saves the current image as PNG, and robots with a camera light get
    a "Camera light" switch.
 
+**No-go zones and virtual walls**: *Edit no-go zones and walls* loads the
+robot's restrictions into two editable layers ("no-go zones" polygons, with a
+No-go / No-mop type, and "virtual walls" lines), on top of the map. Edit them
+with the usual QGIS tools (add, move vertices, snapping, undo), then *Send no-go
+zones and walls to robot…*: after a confirmation, they replace the robot's
+restrictions. Valetudo needs 4 corners per zone and 2 points per wall: other
+shapes are converted (bounding rectangle, line ends) and the confirmation says
+so.
+
 **Dock station notifications**: once a robot is configured, the plugin checks
 the dock every minute in the background (panel open or not) and shows a
 persistent warning when the fresh water tank or the detergent is empty, the
@@ -88,6 +97,7 @@ is the Swagger UI embedded in the robot: `http://<robot-ip>/swagger/`.
 | `camera.py`                  | H.264 stream decoding through an ffmpeg subprocess      |
 | `camera_widget.py`           | Camera video widget, embedded in the status panel       |
 | `ssh_reboot.py`              | Robot reboot over SSH (key-based, non-blocking)         |
+| `restrictions.py`            | Editable no-go zones / virtual walls and their payload  |
 | `map_tools.py`               | Map tools: draw a cleaning zone, pick a go-to target    |
 | `coords.py`                  | Frame conversion (the only place that flips the Y axis) |
 | `settings_dialog.py`         | Settings (URL, authentication, refresh interval)        |

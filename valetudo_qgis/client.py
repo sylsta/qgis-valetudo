@@ -17,7 +17,7 @@ from .coords import q2v
 
 COMMAND_KEYS = ("start", "pause", "stop", "home", "segments", "zone", "goto",
                 "fan_speed", "water_usage", "camera_light",
-                "locate", "empty_dock", "mop_wash", "mop_dry")
+                "locate", "empty_dock", "mop_wash", "mop_dry", "restrictions")
 
 # One-shot dock/robot commands: key -> (capability, payload).
 SIMPLE_COMMANDS = {
@@ -53,6 +53,7 @@ class ValetudoClient(QObject):
     presetsReceived = pyqtSignal(str, list)   # capability name, preset names
     toggleReceived = pyqtSignal(str, bool)     # capability name, enabled
     mapPeeked = pyqtSignal(dict)               # map read for the panel only (no layers)
+    restrictionsReceived = pyqtSignal(dict)    # no-go zones and virtual walls
     commandDone = pyqtSignal(str)
     reachable = pyqtSignal(bool)              # emitted after every request
     error = pyqtSignal(str)
@@ -167,6 +168,10 @@ class ValetudoClient(QObject):
                   lambda d: self.toggleReceived.emit(capability, bool((d or {}).get("enabled"))),
                   quiet=quiet)
 
+    def fetch_restrictions(self):
+        self._get("/robot/capabilities/CombinedVirtualRestrictionsCapability",
+                  lambda d: self.restrictionsReceived.emit(d or {}))
+
     def peek_map(self):
         """Read the map for the status panel (position) without touching the layers."""
         if self._peek_pending:
@@ -198,6 +203,10 @@ class ValetudoClient(QObject):
     def _command(self, capability, payload, key, path_suffix=""):
         self._put(f"/robot/capabilities/{capability}{path_suffix}", payload,
                   lambda _data: self.commandDone.emit(key))
+
+    def set_restrictions(self, payload):
+        """Replace all no-go zones and virtual walls on the robot."""
+        self._command("CombinedVirtualRestrictionsCapability", payload, "restrictions")
 
     def simple_command(self, key):
         """Run a one-shot command from SIMPLE_COMMANDS (locate, empty dock, wash/dry mops)."""

@@ -29,68 +29,42 @@ without restarting QGIS.
 
 1. *Plugins > Valetudo > Settings…*: enter the robot address (e.g. `http://192.168.1.23`)
    and click **Test connection**.
-2. Open the **Valetudo panel** (toolbar button or *Plugins > Valetudo*). Everything is
-   there, organised by task:
-   - **Top**: robot, connection, state badge, battery, and one red banner for any
-     problem (robot error, empty fresh water tank, full waste water tank…).
-   - **Clean**: choose **Whole home**, **Rooms** (tick them in the list) or **Zone**
-     (*Draw a zone on the map*, the zone stays visible), set passes, suction and
-     water, then click the single **Clean** button, whose text says what it will do.
-   - **Robot**: Pause, Stop, Dock, Go to… (click a point on the map), Locate, Camera.
-   - **Dock station**: fresh water, waste water, detergent and dust bag states, with
-     Empty bin, Wash mops and Dry mops next to them.
-   - Collapsible: **Camera** (live video, plays only while open; camera light),
-     **Map** (show map, live tracking, no-go zones, robot position), **Maintenance**
-     (consumables, statistics), **Advanced** (details, Wi-Fi, events, features, boot
-     log, reboot).
-3. The toolbar keeps three buttons: open the panel, show the map, live tracking.
+2. Click the **Valetudo panel** button. That's the whole interface:
 
-The panel refreshes itself while visible (every 5 s while the robot works, every
-30 s otherwise), even when the robot is docked. Actions the robot does not support
-are greyed out or hidden.
+   ```
+   Eureka J15 Pro Ultra        [Docked]  ⋯
+   ████████████████████ 99 %
+   ⚠ problems, only when there are some
+   ☐ Kitchen  ☐ Hallway  …      (rooms, if the robot knows them)
+   [ Clean everything ]         (or "Clean 2 room(s)" when rooms are ticked)
+   [ Pause ]        [ Dock ]
+   [ Clean a zone ] [ Go to… ]  (then draw / click on the map)
+   [ Show on map ]              (robot, rooms and path, live)
+   ▸ Camera
+   ```
+
+   The **⋯** menu holds the rare tools: locate (beep), empty dust bin, wash and
+   dry mops, no-go zones and virtual walls, boot log, reboot over SSH, settings.
+   Tools the robot does not support are not shown.
 
 **Go to… on robots without go-to** (e.g. Eureka J15 Pro Ultra): the plugin sends a
-60 cm zone clean at that spot and pauses the robot as soon as it is within 50 cm (it
-vacuums, and mops if enabled, on its way; a first-time confirmation says so).
+60 cm zone clean at that spot and pauses the robot as soon as it is within 50 cm
+(it cleans on its way; a first-time confirmation says so).
 
-**Camera**: robots that expose a raw H.264 stream over TCP (default
-`tcp://<robot>:8555`). Needs **ffmpeg** (in the `PATH`, or set its path in the
-settings). The stream reconnects by itself; **Save snapshot** saves a PNG.
+**Camera**: open the Camera section; the video plays only while it is open. Needs a
+raw H.264 stream over TCP (default `tcp://<robot>:8555`) and **ffmpeg**.
 
-**No-go zones and virtual walls**: *Edit no-go zones and walls* loads the
-robot's restrictions into two editable layers ("no-go zones" polygons, with a
-No-go / No-mop type, and "virtual walls" lines), on top of the map. Edit them
-with the usual QGIS tools (add, move vertices, snapping, undo); a bar at the top
-of the map offers *Send to robot…* (after a confirmation, they replace the
-robot's restrictions) and *Discard changes*. Valetudo needs 4 corners per zone and 2 points per wall: other
-shapes are converted (bounding rectangle, line ends) and the confirmation says
-so.
+**No-go zones and virtual walls** (⋯ menu): edit them as two QGIS layers, then
+*Send to robot…* from the bar at the top of the map. Valetudo needs 4 corners per
+zone and 2 points per wall; other shapes are converted and the confirmation says so.
 
-**Dock station notifications**: once a robot is configured, the plugin checks
-the dock every minute in the background (panel open or not) and shows a
-persistent warning when the fresh water tank or the detergent is empty, the
-waste water tank or the dust bag is full, or a tank is missing; a short message
-confirms when it is OK again. Turn it off in the settings.
+**Notifications**: the plugin checks the dock every minute and warns when the fresh
+water or detergent is empty, the waste water or dust bag is full, or a tank is
+missing (can be turned off in the settings).
 
-**Reboot robot (SSH)…** (Valetudo menu and status panel): Valetudo deliberately
-has no reboot API, so the plugin runs `ssh <user>@<robot> reboot` after a
-confirmation. It needs an SSH client and key-based login to the robot
-(`ssh-copy-id root@<robot>`); no password is ever stored or asked for. SSH user
-and port are in the settings (`root`, 22 by default).
-
-**Boot log**: after *Reboot robot (SSH)…*, or with *Watch robot boot* (e.g.
-after using the power button), the plugin follows the robot's startup and
-times each stage: offline, network up (SSH port answers), Valetudo answers
-(version), robot firmware ready (state, battery), camera stream available, then
-the total boot time and the end of Valetudo's own log. Lines go to the
-*Valetudo* tab of the QGIS *Log Messages* panel and to the *Boot log* section of
-the status panel (Info tab).
-
-Actions the robot does not support are greyed out. Zone and go-to tools need the
-map to be shown first, and switch back to the Pan tool after each use.
-
-The map is displayed in the robot's own frame, in centimetres. The API reference
-is the Swagger UI embedded in the robot: `http://<robot-ip>/swagger/`.
+**Reboot over SSH** (⋯ menu): needs key-based SSH login to the robot; no password
+is stored. The boot is then followed stage by stage in the *Valetudo* tab of the
+QGIS *Log Messages* panel.
 
 ## Code layout
 

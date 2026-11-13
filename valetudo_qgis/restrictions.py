@@ -12,7 +12,6 @@ oriented bounding box of a polygon) and reported as warnings.
 """
 
 from qgis.PyQt.QtCore import QMetaType
-from qgis.PyQt.QtGui import QColor
 from qgis.core import (
     QgsCategorizedSymbolRenderer,
     QgsCoordinateReferenceSystem,

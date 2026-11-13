@@ -39,7 +39,7 @@ without restarting QGIS.
    speed and water usage (editable), dock station state (fresh and waste water
    tanks, detergent, dust bag), current and total statistics, consumables,
    attachments, position, Wi-Fi, supported features and recent events. It has its
-   own command list (Start … Go here, pick one and click Run) and a Reboot button,
+   own command list (Start … Go here and Reboot robot, pick one and click Run),
    and refreshes itself while it
    is visible (every 5 s while the robot works, every 30 s otherwise), even when
    the robot is docked. Every section folds by unticking its title (remembered);

@@ -17,8 +17,9 @@ from qgis.PyQt.QtWidgets import (
     QLabel,
     QListWidget,
     QProgressBar,
+    QGridLayout,
     QScrollArea,
-    QToolBar,
+    QSizePolicy,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -245,12 +246,12 @@ class ValetudoPanel(QgsDockWidget):
 
         # Controls: filled by set_actions() with the plugin's own QActions, so the
         # toolbar, the menu and the panel share one state (enabled, checked).
-        self._action_bars = []
-        for _ in range(2):
-            bar = QToolBar()
-            bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
-            self._layout.addWidget(bar)
-            self._action_bars.append(bar)
+        # A grid of buttons, not a toolbar: a narrow panel must never hide a
+        # button behind an overflow arrow.
+        self._actions_widget = QWidget()
+        self._actions_grid = QGridLayout(self._actions_widget)
+        self._actions_grid.setContentsMargins(0, 0, 0, 0)
+        self._layout.addWidget(self._actions_widget)
 
         # Status
         self.box_status, form = self._section(tr("Status"))
@@ -335,15 +336,30 @@ class ValetudoPanel(QgsDockWidget):
                     self.box_attachments, self.box_wifi, self.box_dock):
             box.setVisible(False)   # shown once the robot reports them
 
-    def set_actions(self, *rows):
-        """Show the given rows of plugin QActions as buttons (None = separator)."""
-        for bar, actions in zip(self._action_bars, rows):
-            bar.clear()
-            for action in actions:
-                if action is None:
-                    bar.addSeparator()
-                else:
-                    bar.addAction(action)
+    def set_actions(self, *groups, columns=2):
+        """Show groups of plugin QActions as buttons, `columns` per line.
+
+        Each button uses the action itself (setDefaultAction), so its text,
+        enabled and checked state always match the toolbar and the menu.
+        A small gap separates the groups.
+        """
+        grid = self._actions_grid
+        while grid.count():
+            item = grid.takeAt(0)
+            if item.widget() is not None:
+                item.widget().deleteLater()
+        row = 0
+        for group in groups:
+            actions = [a for a in group if a is not None]
+            for i, action in enumerate(actions):
+                button = QToolButton()
+                button.setDefaultAction(action)
+                button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+                button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+                grid.addWidget(button, row + i // columns, i % columns)
+            row += (len(actions) + columns - 1) // columns
+            grid.setRowMinimumHeight(row, 6)   # gap between groups
+            row += 1
 
     # -- client wiring ---------------------------------------------------------
 

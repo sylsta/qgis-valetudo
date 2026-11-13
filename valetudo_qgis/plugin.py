@@ -44,7 +44,7 @@ MAP_ROW = ["show_map", "live", None, "clean_rooms", "zone", "goto"]
 TOOLBAR = ["show_map", "live", None] + ROBOT_ROW + [None, "clean_rooms", "zone", "goto",
                                                     None, "status_panel", "camera"]
 MENU = ["settings", "status_panel", "camera"] + MAP_ROW + ROBOT_ROW + [None, "reboot"]
-PANEL_ROBOT_ROW = ROBOT_ROW + [None, "reboot"]   # reboot: menu and panel, not the toolbar
+PANEL_SYSTEM_ROW = ["reboot"]   # reboot: menu and panel, not the toolbar
 
 
 def command_labels():
@@ -131,8 +131,9 @@ class ValetudoPlugin:
         for key in MENU:
             if key is not None:
                 self.iface.addPluginToMenu(self.menu, self.act[key])
-        self.panel.set_actions([self.act[k] if k else None for k in PANEL_ROBOT_ROW],
-                               [self.act[k] if k else None for k in MAP_ROW])
+        self.panel.set_actions([self.act[k] for k in ROBOT_ROW],
+                               [self.act[k] for k in MAP_ROW if k],
+                               [self.act[k] for k in PANEL_SYSTEM_ROW])
 
         canvas = self.iface.mapCanvas()
         self.zone_tool = ZoneMapTool(canvas)

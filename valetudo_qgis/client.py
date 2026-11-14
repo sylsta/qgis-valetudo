@@ -17,7 +17,8 @@ from .coords import q2v
 
 COMMAND_KEYS = ("start", "pause", "stop", "home", "segments", "zone", "goto",
                 "fan_speed", "water_usage", "camera_light",
-                "locate", "empty_dock", "mop_wash", "mop_dry", "restrictions")
+                "locate", "empty_dock", "mop_wash", "mop_dry", "restrictions",
+                "rename_room", "join_rooms", "split_room")
 
 # One-shot dock/robot commands: key -> (capability, payload).
 SIMPLE_COMMANDS = {
@@ -99,12 +100,17 @@ class ValetudoClient(QObject):
             self._replies.discard(reply)
             try:
                 if reply.error() != QNetworkReply.NetworkError.NoError:
-                    self.reachable.emit(False)
+                    # A refused command (HTTP 4xx/5xx) still means the robot answered.
+                    status = reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
+                    self.reachable.emit(bool(status))
+                    detail = self._error_detail(reply)
                     if on_error:
-                        on_error(reply.errorString())
+                        on_error(detail or reply.errorString())
                     if not quiet:
-                        # errorString() is already localised by Qt
-                        self.error.emit(f"{reply.url().toString()}: {reply.errorString()}")
+                        # errorString() is already localised by Qt; the robot's own
+                        # message (e.g. why a split line was refused) is added if any.
+                        text = f"{reply.url().toString()}: {reply.errorString()}"
+                        self.error.emit(f"{text} — {detail}" if detail else text)
                     return
                 self.reachable.emit(True)
                 body = bytes(reply.readAll())
@@ -122,6 +128,23 @@ class ValetudoClient(QObject):
                 reply.deleteLater()
 
         reply.finished.connect(finished)
+
+    @staticmethod
+    def _error_detail(reply):
+        """Short text body of an error reply (Valetudo explains refusals there)."""
+        try:
+            body = bytes(reply.readAll()).decode("utf-8", "replace").strip()
+        except Exception:
+            return ""
+        if not body or body.startswith("<"):
+            return ""
+        try:
+            data = json.loads(body)
+            if isinstance(data, dict):
+                body = str(data.get("message") or data.get("error") or body)
+        except ValueError:
+            pass
+        return body[:300]
 
     @staticmethod
     def _as_list(data):
@@ -246,6 +269,27 @@ class ValetudoClient(QObject):
         """Switch an on/off capability (e.g. the camera light)."""
         self._command(capability, {"action": "enable" if enabled else "disable"},
                       TOGGLE_CAPABILITIES.get(capability, capability))
+
+    # -- room (segment) editing ----------------------------------------------------
+
+    def rename_segment(self, segment_id, name):
+        self._command("MapSegmentRenameCapability", {
+            "action": "rename_segment", "segment_id": str(segment_id), "name": name,
+        }, "rename_room")
+
+    def join_segments(self, segment_a_id, segment_b_id):
+        self._command("MapSegmentEditCapability", {
+            "action": "join_segments",
+            "segment_a_id": str(segment_a_id), "segment_b_id": str(segment_b_id),
+        }, "join_rooms")
+
+    def split_segment_qgis(self, segment_id, point_a, point_b):
+        """Split a room along a line given in the QGIS frame (converted to map cm)."""
+        (ax, ay), (bx, by) = q2v(point_a), q2v(point_b)
+        self._command("MapSegmentEditCapability", {
+            "action": "split_segment", "segment_id": str(segment_id),
+            "pA": {"x": ax, "y": ay}, "pB": {"x": bx, "y": by},
+        }, "split_room")
 
     def clean_segments(self, segment_ids, iterations=1):
         self._command("MapSegmentationCapability", {

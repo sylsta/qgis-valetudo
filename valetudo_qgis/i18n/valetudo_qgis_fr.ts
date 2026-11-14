@@ -1113,5 +1113,57 @@ Continuer ?</translation>
         <source>Tools</source>
         <translation>Outils</translation>
     </message>
+    <message>
+        <source>Rename room</source>
+        <translation>Renommer la pièce</translation>
+    </message>
+    <message>
+        <source>Join rooms</source>
+        <translation>Fusionner des pièces</translation>
+    </message>
+    <message>
+        <source>Split room</source>
+        <translation>Diviser la pièce</translation>
+    </message>
+    <message>
+        <source>Tick rooms to clean them. Right-click a room to rename, join or split it.</source>
+        <translation>Cochez des pièces pour les nettoyer. Clic droit sur une pièce pour la renommer, la fusionner ou la diviser.</translation>
+    </message>
+    <message>
+        <source>Rename…</source>
+        <translation>Renommer…</translation>
+    </message>
+    <message>
+        <source>Join with</source>
+        <translation>Fusionner avec</translation>
+    </message>
+    <message>
+        <source>Split with a line on the map…</source>
+        <translation>Diviser avec une ligne sur la carte…</translation>
+    </message>
+    <message>
+        <source>Greyed out: not supported by this robot.</source>
+        <translation>Grisé : non pris en charge par ce robot.</translation>
+    </message>
+    <message>
+        <source>New name:</source>
+        <translation>Nouveau nom :</translation>
+    </message>
+    <message>
+        <source>Join “{a}” and “{b}” into one room?</source>
+        <translation>Fusionner « {a} » et « {b} » en une seule pièce ?</translation>
+    </message>
+    <message>
+        <source>Split “{room}”: click the two ends of the cut line on the map (from wall to wall). Right-click or Esc to cancel.</source>
+        <translation>Diviser « {room} » : cliquez les deux extrémités de la ligne de coupe sur la carte (d'un mur à l'autre). Clic droit ou Échap pour annuler.</translation>
+    </message>
+    <message>
+        <source>Split “{room}” along this {length} m line?
+
+The robot only accepts a line that crosses the room from wall to wall.</source>
+        <translation>Diviser « {room} » le long de cette ligne de {length} m ?
+
+Le robot n'accepte qu'une ligne qui traverse la pièce d'un mur à l'autre.</translation>
+    </message>
 </context>
 </TS>

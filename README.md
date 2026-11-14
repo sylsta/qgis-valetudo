@@ -57,6 +57,11 @@ Robot · Camera · Maintenance · Advanced   (tabs)
 - Every button does one thing; its tooltip says what. *Clean a zone…* and *Go to…*
   stay pressed until you have drawn the zone or clicked the point on the map.
 - Rooms are chosen only in the list; the button says how many are ticked.
+- **Edit rooms**: right-click a room in the list → *Rename…*, *Join with ▸* another
+  room, or *Split with a line on the map…* (click the two ends of the cut line,
+  from wall to wall; right-click or Esc cancels). Each edit asks for confirmation;
+  the room list and the map are then reloaded. If the robot refuses (e.g. a split
+  line that does not cross the room), its own message is shown.
 - **Show on map** loads the map, refreshes the robot live and keeps it in view
   (recentring only when it nears the edge). Click again to stop.
 - **Tabs**: Robot (state details, dock station states, fan speed and water usage,

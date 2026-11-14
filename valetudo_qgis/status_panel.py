@@ -20,7 +20,9 @@ from qgis.PyQt.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QInputDialog,
     QMenu,
+    QMessageBox,
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
@@ -266,6 +268,7 @@ def _format_time(iso):
 
 class ValetudoPanel(QgsDockWidget):
     clientRequested = pyqtSignal()   # the panel was shown but no client exists yet
+    splitRequested = pyqtSignal(str, str)   # room id, room name: draw the cut on the map
 
     def __init__(self, parent=None):
         super().__init__(tr("Valetudo status"), parent)
@@ -371,6 +374,11 @@ class ValetudoPanel(QgsDockWidget):
         self.rooms = QListWidget()
         self.rooms.setMaximumHeight(110)
         self.rooms.itemChanged.connect(self._on_room_toggled)
+        # Room editing lives in a right-click menu, so it adds no buttons.
+        self.rooms.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.rooms.customContextMenuRequested.connect(self._room_menu)
+        self.rooms.setToolTip(tr("Tick rooms to clean them. Right-click a room to rename, "
+                                 "join or split it."))
         self.rooms.setVisible(False)
         clean.addWidget(self.rooms, 0, 0, 1, 2)
         self.btn_rooms = QPushButton()
@@ -585,6 +593,52 @@ class ValetudoPanel(QgsDockWidget):
         self.rooms.blockSignals(False)
         self.rooms.setVisible(bool(rows))
         self._update_rooms_button()
+
+    def _room_menu(self, pos):
+        item = self.rooms.itemAt(pos)
+        seg_id = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
+        if seg_id is None or self.client is None:
+            return
+        name = item.text()
+        caps = self.capabilities
+        can_rename = caps is None or "MapSegmentRenameCapability" in caps
+        can_edit = caps is None or "MapSegmentEditCapability" in caps
+
+        menu = QMenu(self)
+        rename = menu.addAction(tr("Rename…"))
+        rename.setEnabled(can_rename)
+        rename.triggered.connect(lambda *_: self._rename_room(seg_id, name))
+        join = menu.addMenu(tr("Join with"))
+        join.setEnabled(can_edit and len(self._segments) > 1)
+        for other_id, other_name in self._segments:
+            if other_id != seg_id:
+                action = join.addAction(other_name)
+                action.triggered.connect(
+                    lambda *_, o=other_id, on=other_name: self._join_rooms(seg_id, name, o, on))
+        split = menu.addAction(tr("Split with a line on the map…"))
+        split.setEnabled(can_edit)
+        split.triggered.connect(lambda *_: self.splitRequested.emit(seg_id, name))
+        if not can_rename or not can_edit:
+            menu.addSeparator()
+            note = menu.addAction(tr("Greyed out: not supported by this robot."))
+            note.setEnabled(False)
+        menu.exec(self.rooms.viewport().mapToGlobal(pos))
+
+    def _rename_room(self, seg_id, name):
+        new_name, ok = QInputDialog.getText(self, tr("Rename room"), tr("New name:"), text=name)
+        new_name = new_name.strip()
+        if ok and new_name and new_name != name and self.client is not None:
+            self.client.rename_segment(seg_id, new_name)
+
+    def _join_rooms(self, seg_a, name_a, seg_b, name_b):
+        answer = QMessageBox.question(
+            self, tr("Join rooms"),
+            tr("Join “{a}” and “{b}” into one room?").format(a=name_a, b=name_b),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+        if answer == QMessageBox.StandardButton.Yes and self.client is not None:
+            self._checked_rooms -= {seg_a, seg_b}
+            self.client.join_segments(seg_a, seg_b)
 
     def _on_room_toggled(self, item):
         seg_id = item.data(Qt.ItemDataRole.UserRole)

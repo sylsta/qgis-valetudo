@@ -18,7 +18,7 @@ from .goto_emulation import ZONE_SIZE_CM as GOTO_ZONE_SIZE_CM, GoToEmulator
 from .i18n import install_translator, remove_translator, tr
 from .icons import has_icon, icon
 from .map_layers import ValetudoLayers, layer_names
-from .map_tools import GoToMapTool, ZoneMapTool
+from .map_tools import GoToMapTool, LineMapTool, ZoneMapTool
 from .restrictions import RestrictionLayers, layer_names as restriction_layer_names
 from .settings_dialog import SettingsDialog, load_settings
 from .ssh_reboot import SshReboot
@@ -103,6 +103,9 @@ def command_labels():
         "mop_wash": tr("Wash mops"),
         "mop_dry": tr("Dry mops"),
         "restrictions": tr("Send no-go zones and walls"),
+        "rename_room": tr("Rename room"),
+        "join_rooms": tr("Join rooms"),
+        "split_room": tr("Split room"),
     }
 
 
@@ -203,6 +206,11 @@ class ValetudoPlugin:
         self.goto_tool = GoToMapTool(canvas)
         self.goto_tool.setAction(self.act["goto"])
         self.goto_tool.pointPicked.connect(self._on_goto)
+        self.split_tool = LineMapTool(canvas)
+        self.split_tool.lineDrawn.connect(self._on_split_line)
+        self.split_tool.cancelled.connect(lambda: self.iface.actionPan().trigger())
+        self._split_room = None   # (id, name) of the room being split
+        self.panel.splitRequested.connect(self._start_split)
 
         self._apply_capabilities()
 
@@ -234,12 +242,15 @@ class ValetudoPlugin:
             self._watch = None
         self._drop_client()
         canvas = self.iface.mapCanvas()
-        for tool in (self.zone_tool, self.goto_tool):
+        split_tool = getattr(self, "split_tool", None)
+        for tool in (self.zone_tool, self.goto_tool, split_tool):
             if tool is not None and canvas.mapTool() is tool:
                 canvas.unsetMapTool(tool)
         if self.zone_tool is not None:
             self.zone_tool.cleanup()
-        self.zone_tool = self.goto_tool = None
+        if split_tool is not None:
+            split_tool.cleanup()
+        self.zone_tool = self.goto_tool = self.split_tool = None
 
         for key in MENU:
             if key is not None and key in self.act:
@@ -549,6 +560,39 @@ class ValetudoPlugin:
         if client:
             client.clean_zone_qgis(rect)
 
+    # -- room split -----------------------------------------------------------------
+
+    def _start_split(self, seg_id, name):
+        """From the rooms list: draw the cut line on the map (two clicks)."""
+        client = self._get_client()
+        if not client:
+            return
+        if not self.layers.exists():
+            client.fetch_map()   # the line is drawn on the robot's map
+        self._split_room = (seg_id, name)
+        self.iface.mapCanvas().setMapTool(self.split_tool)
+        self._message(tr("Split “{room}”: click the two ends of the cut line on the map "
+                         "(from wall to wall). Right-click or Esc to cancel.").format(room=name),
+                      Qgis.MessageLevel.Info)
+
+    def _on_split_line(self, point_a, point_b):
+        self.iface.actionPan().trigger()
+        room, self._split_room = self._split_room, None
+        client = self._get_client()
+        if room is None or not client:
+            return
+        seg_id, name = room
+        length = point_a.distance(point_b) / 100
+        answer = QMessageBox.question(
+            self.iface.mainWindow(), tr("Split room"),
+            tr("Split “{room}” along this {length} m line?\n\n"
+               "The robot only accepts a line that crosses the room from wall to wall.")
+            .format(room=name, length=f"{length:.1f}"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+        if answer == QMessageBox.StandardButton.Yes:
+            client.split_segment_qgis(seg_id, point_a, point_b)
+
     def _on_goto(self, point):
         self.iface.actionPan().trigger()
         client = self._get_client()
@@ -726,6 +770,12 @@ class ValetudoPlugin:
         if key == "restrictions" and self.client is not None:
             self.client.fetch_map()          # show what the robot now uses
             self.client.fetch_restrictions()  # and reload the editable layers from it
+        if key in ("rename_room", "join_rooms", "split_room") and self.client is not None:
+            self.client.fetch_segments(quiet=True)   # new names / rooms in the list
+            if self.layers.exists():
+                # The robot may need a moment to rebuild its map: reload now and soon.
+                self.client.fetch_map()
+                QTimer.singleShot(3000, lambda: self.client and self.client.fetch_map())
         label = command_labels().get(key, key)
         self._message(tr("Command “{command}” sent.").format(command=label),
                       Qgis.MessageLevel.Success)
